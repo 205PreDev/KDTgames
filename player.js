@@ -20,6 +20,7 @@ export const player = (() => {
                 right: false,
                 shift: false, // Shift 키 추가
                 e_key: false, // E 키 추가
+                ctrl_key: false, // Ctrl 키 추가
             };
             this.inventory_ = []; // 인벤토리 추가
 
@@ -39,6 +40,9 @@ export const player = (() => {
                 case 'KeyA': this.keys_.left = true; break;
                 case 'KeyD': this.keys_.right = true; break;
                 case 'KeyE': this.keys_.e_key = true; this.PickupWeapon_(); break;
+                case 'ControlLeft':
+                case 'ControlRight':
+                    this.keys_.ctrl_key = true; this.LogHandPosition_(); break;
                 case 'ShiftLeft':
                 case 'ShiftRight':
                     this.keys_.shift = true; break;
@@ -52,9 +56,24 @@ export const player = (() => {
                 case 'KeyA': this.keys_.left = false; break;
                 case 'KeyD': this.keys_.right = false; break;
                 case 'KeyE': this.keys_.e_key = false; break;
+                case 'ControlLeft':
+                case 'ControlRight':
+                    this.keys_.ctrl_key = false; break;
                 case 'ShiftLeft':
                 case 'ShiftRight':
                     this.keys_.shift = false; break;
+            }
+        }
+
+        LogHandPosition_() {
+            if (!this.mesh_) return;
+            const handBone = this.mesh_.getObjectByName('FistR');
+            if (handBone) {
+                const worldPosition = new THREE.Vector3();
+                handBone.getWorldPosition(worldPosition);
+                console.log('FistR World Position:', worldPosition);
+            } else {
+                console.log('FistR bone not found.');
             }
         }
 
@@ -75,6 +94,10 @@ export const player = (() => {
                         if (c.material) {
                             c.material.color.offsetHSL(0, 0, 0.25);
                         }
+                    }
+                    // 뼈 이름 출력
+                    if (c.isBone) {
+                        console.log(c.name);
                     }
                 });
 
@@ -130,6 +153,23 @@ export const player = (() => {
                 }
                 // 5. 콘솔에 획득한 무기 정보를 로그로 남깁니다.
                 console.log('무기 획득:', closestWeapon);
+
+                // 6. 무기를 손에 장착합니다.
+                this.EquipWeapon(closestWeapon);
+            }
+        }
+
+        EquipWeapon(weapon) {
+            const handBone = this.mesh_.getObjectByName('FistR');
+            if (handBone && weapon.model_) {
+                handBone.add(weapon.model_);
+                weapon.model_.position.set(0, 0, 0.1); // 뼈를 기준으로 위치 초기화
+                weapon.model_.rotation.set(0, 0, 0); // 뼈를 기준으로 회전 초기화
+                // 필요에 따라 위치와 회전을 미세 조정합니다.
+                weapon.model_.position.x = -0.01;
+                weapon.model_.position.y = 0.09;
+                weapon.model_.rotation.x = Math.PI / 2;
+                weapon.model_.rotation.y = Math.PI / 2;
             }
         }
 
