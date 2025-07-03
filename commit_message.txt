@@ -1,6 +1,4 @@
-feat: Implement weapon pickup functionality
+feat: Add weapon equipping to player and hand position logging
 
-- Add weapon generation on the ground in main.js
-- Implement weapon pickup logic in player.js
-- Add range indicator for weapon pickup
-- Add comments to the PickupWeapon_ function in player.js
+- Player can now equip weapons to their right hand (Fist.R bone).
+- Added functionality to log the world position of the player's right hand bone (Fist.R) to the console when Ctrl is pressed.

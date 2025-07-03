@@ -2,6 +2,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.124/build/three.mod
 import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.124/examples/jsm/controls/OrbitControls.js';
 import { player } from './player.js';
 import { object } from './object.js';
+import { Weapon } from './weapon.js';
 import { math } from './math.js';
 
 class GameStage3 {
@@ -125,7 +126,7 @@ class GameStage3 {
         for (let i = 0; i < 5; i++) {
             const weaponName = weaponNames[i];
             const pos = new THREE.Vector3(math.rand_int(-20, 20), 1, math.rand_int(-20, 20));
-            const weapon = new object.Weapon(this.scene, weaponName, pos);
+            const weapon = new Weapon(this.scene, weaponName, pos);
             this.weapons_.push(weapon);
         }
     }
