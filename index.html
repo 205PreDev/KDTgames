@@ -3,44 +3,61 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>김기찬 Github</title>
-    <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
+    <title>3D 공룡 게임 - 3단계</title>
     <style>
         body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
             margin: 0;
-            background: linear-gradient(135deg, #f6d365 0%, #fda085 100%); /* Vibrant gradient */
-            font-family: 'Pacifico', cursive; /* Fancy font */
-            overflow: hidden; /* Hide overflow for animations */
+            padding: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: Arial, sans-serif;
         }
-        h1 {
-            color: #ffffff; /* White text for contrast */
-            font-size: 5em; /* Even larger font */
-            text-shadow: 4px 4px 8px rgba(0, 0, 0, 0.4); /* More prominent shadow */
-            padding: 20px 40px;
-            border: 5px solid #ffffff; /* White border */
-            border-radius: 15px;
-            background-color: rgba(0, 0, 0, 0.2); /* Semi-transparent background */
-            animation: pulse 2s infinite alternate; /* Pulse animation */
-            letter-spacing: 5px; /* Spacing between letters */
+        
+        #container {
+            width: 100vw;
+            height: 100vh;
         }
-
-        @keyframes pulse {
-            0% {
-                transform: scale(1);
-                box-shadow: 0 0 10px rgba(255, 255, 255, 0.7);
-            }
-            100% {
-                transform: scale(1.05);
-                box-shadow: 0 0 20px rgba(255, 255, 255, 1);
-            }
+        
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            z-index: 100;
+            background: rgba(0,0,0,0.8);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.4);
+            max-width: 300px;
+        }
+        
+        #info h3 {
+            margin: 0 0 15px 0;
+            color: #FFD700;
+            font-size: 18px;
+        }
+        
+        #info p {
+            margin: 8px 0;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        
+        .status {
+            color: #90EE90;
+        }
+        
+        .instruction {
+            color: #87CEEB;
+            border-top: 1px solid #333;
+            padding-top: 10px;
+            margin-top: 15px;
         }
     </style>
 </head>
 <body>
-    <h1>김기찬 Github입니다.</h1>
+    <div id="container"></div>
+    
+    <script type="module" src="main.js"></script>
 </body>
 </html>
