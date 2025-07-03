@@ -33,8 +33,8 @@ class GameStage3 {
         this.SetupLighting();
         this.SetupSkyAndFog();
         this.CreateGround();
-        this.CreatePlayer();
         this.CreateWeapons();
+        this.CreatePlayer();
 
         window.addEventListener('resize', () => this.OnWindowResize(), false);
     }
@@ -124,7 +124,7 @@ class GameStage3 {
         const weaponNames = ['Sword.fbx', 'Axe_Double.fbx', 'Bow_Wooden.fbx', 'Dagger.fbx', 'Hammer_Double.fbx'];
         for (let i = 0; i < 5; i++) {
             const weaponName = weaponNames[i];
-            const pos = new THREE.Vector3(math.rand_int(-20, 20), 2, math.rand_int(-20, 20));
+            const pos = new THREE.Vector3(math.rand_int(-20, 20), 0, math.rand_int(-20, 20));
             const weapon = new object.Weapon(this.scene, weaponName, pos);
             this.weapons_.push(weapon);
         }

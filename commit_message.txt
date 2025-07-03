@@ -1,0 +1,6 @@
+feat: Implement weapon pickup functionality
+
+- Add weapon generation on the ground in main.js
+- Implement weapon pickup logic in player.js
+- Add range indicator for weapon pickup
+- Add comments to the PickupWeapon_ function in player.js
