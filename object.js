@@ -12,7 +12,7 @@ export const object = (() => {
 
     LoadModel_(position) {
       const loader = new GLTFLoader();
-      loader.setPath('./resources/Ultimate Animated Character Pack - Nov 2019/glTF/');
+      loader.setPath('./resources/char/glTF/');
       loader.load('Casual_Bald.gltf', (gltf) => {
         const model = gltf.scene;
         model.scale.setScalar(1);

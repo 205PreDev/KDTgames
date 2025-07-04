@@ -1,4 +1,5 @@
-feat: Add weapon equipping to player and hand position logging
+refactor: Move Weapon class to weapon.js and fix import errors
 
-- Player can now equip weapons to their right hand (Fist.R bone).
-- Added functionality to log the world position of the player's right hand bone (Fist.R) to the console when Ctrl is pressed.
+- Moved the Weapon class from object.js to a new file, weapon.js, for better modularity.
+- Updated import statements in main.js and player.js to reflect the new weapon.js module.
+- Fixed 'Cannot access weapon before initialization' error by changing weapon.js to directly export the Weapon class.
