@@ -12,7 +12,7 @@ export class Weapon {
 
   LoadModel_(weaponName, position) {
     const loader = new FBXLoader();
-    loader.setPath('./resources/Ultimate RPG Items Pack - Aug 2019/FBX/');
+    loader.setPath('./resources/weapon/FBX/');
     loader.load(weaponName, (fbx) => {
       const model = fbx;
       model.scale.setScalar(0.01);

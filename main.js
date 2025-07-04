@@ -1,29 +1,36 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.124/build/three.module.js';
 import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.124/examples/jsm/controls/OrbitControls.js';
+import { Weapon } from './weapon.js';
 import { player } from './player.js';
 import { object } from './object.js';
-import { Weapon } from './weapon.js';
 import { math } from './math.js';
-import { hp } from './hp.js'; // Added for HP UI
+import { ui } from './ui.js';
+import { hp } from './hp.js';
+
+// 전역에서 한 번만 생성
+const gameUI = new ui.GameUI();
+const hpUI = new hp.HPUI();
+hpUI.setGameUI(gameUI); // 반드시 연결!
 
 class GameStage3 {
     constructor() {
-        this.hpUI = new hp.HPUI(); // Initialize HP UI
+        // 이미 생성된 hpUI를 사용
+        this.hpUI = hpUI;
         this.Initialize();
         this.RAF();
     }
 
     Initialize() {
         // WebGL 렌더러
-        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false }); // Added alpha: false
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
         this.renderer.setPixelRatio(window.devicePixelRatio);
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        this.renderer.outputEncoding = THREE.sRGBEncoding; // Added
-        this.renderer.gammaFactor = 2.2; // Added
+        this.renderer.outputEncoding = THREE.sRGBEncoding;
+        this.renderer.gammaFactor = 2.2;
         document.getElementById('container').appendChild(this.renderer.domElement);
-        
+
         // 카메라
         const fov = 60;
         const aspect = window.innerWidth / window.innerHeight;
@@ -40,7 +47,7 @@ class GameStage3 {
         this.SetupLighting();
         this.SetupSkyAndFog();
         this.CreateGround();
-        this.CreateWeapons(); // Keep weapon creation
+        this.CreateWeapons();
         this.CreatePlayer();
 
         window.addEventListener('resize', () => this.OnWindowResize(), false);
@@ -53,8 +60,8 @@ class GameStage3 {
         directionalLight.target.position.set(0, 0, 0);
         directionalLight.castShadow = true;
         directionalLight.shadow.bias = -0.001;
-        directionalLight.shadow.mapSize.width = 1024; // Changed from 2048
-        directionalLight.shadow.mapSize.height = 1024; // Changed from 2048
+        directionalLight.shadow.mapSize.width = 1024;
+        directionalLight.shadow.mapSize.height = 1024;
         directionalLight.shadow.camera.near = 1.0;
         directionalLight.shadow.camera.far = 200.0;
         directionalLight.shadow.camera.left = -50;
@@ -72,12 +79,11 @@ class GameStage3 {
     SetupSkyAndFog() {
         // 하늘 셰이더
         const skyUniforms = {
-            topColor:    { value: new THREE.Color(0x0077FF) },
+            topColor: { value: new THREE.Color(0x0077FF) },
             bottomColor: { value: new THREE.Color(0x89b2eb) },
-            offset:      { value: 33 },
-            exponent:    { value: 0.6 }
+            offset: { value: 33 },
+            exponent: { value: 0.6 }
         };
-
         const skyGeometry = new THREE.SphereGeometry(1000, 32, 15);
         const skyMaterial = new THREE.ShaderMaterial({
             uniforms: skyUniforms,
@@ -100,7 +106,6 @@ class GameStage3 {
                 }`,
             side: THREE.BackSide,
         });
-
         const skyMesh = new THREE.Mesh(skyGeometry, skyMaterial);
         this.scene.add(skyMesh);
 
@@ -111,16 +116,15 @@ class GameStage3 {
     CreateGround() {
         // 잔디 텍스처
         const textureLoader = new THREE.TextureLoader();
-        const grassTexture = textureLoader.load('resources/ground.jpeg');
+        const grassTexture = textureLoader.load('resources/Map.png');
         grassTexture.wrapS = THREE.RepeatWrapping;
         grassTexture.wrapT = THREE.RepeatWrapping;
-        grassTexture.repeat.set(10, 10);
+        grassTexture.repeat.set(2, 2);
 
         // 바닥 메쉬
-        const groundGeometry = new THREE.PlaneGeometry(200, 200, 10, 10); // Changed size
+        const groundGeometry = new THREE.PlaneGeometry(80, 80, 10, 10);
         const groundMaterial = new THREE.MeshLambertMaterial({
-            map: grassTexture, // Added texture
-            color: 0xFFFFFF
+            map: grassTexture,
         });
         this.ground = new THREE.Mesh(groundGeometry, groundMaterial);
         this.ground.rotation.x = -Math.PI / 2;
@@ -131,16 +135,20 @@ class GameStage3 {
 
     CreatePlayer() {
         // 플레이어 생성 및 HP UI 연결
-        this.player_ = new player.Player({ scene: this.scene, weapons: this.weapons_ }); // Keep weapons
-        this.hpUI.setPlayer(this.player_); // Set player for HP UI
+        this.player_ = new player.Player({
+            scene: this.scene,
+            hpUI: this.hpUI,
+            weapons: this.weapons_
+        });
+        this.hpUI.setPlayer(this.player_);
 
         // NPC 생성
         const npcPos = new THREE.Vector3(0, 0, -4);
         this.npc_ = new object.NPC(this.scene, npcPos);
 
         // 카메라 오프셋 및 회전
-        this.cameraTargetOffset = new THREE.Vector3(0, 15, 10); // Changed offset
-        this.rotationAngle = 4.715; // Changed initial rotation
+        this.cameraTargetOffset = new THREE.Vector3(0, 15, 10);
+        this.rotationAngle = 4.715;
 
         // 마우스 드래그로 카메라 회전
         window.addEventListener('mousemove', (e) => this.OnMouseMove(e), false);
@@ -156,7 +164,7 @@ class GameStage3 {
         checkAndRenderFace();
     }
 
-    CreateWeapons() { // 무기 생성
+    CreateWeapons() {
         this.weapons_ = [];
         const weaponNames = ['Sword.fbx', 'Axe_Double.fbx', 'Bow_Wooden.fbx', 'Dagger.fbx', 'Hammer_Double.fbx'];
         for (let i = 0; i < 5; i++) {
@@ -176,16 +184,15 @@ class GameStage3 {
 
     UpdateCamera() {
         if (!this.player_ || !this.player_.mesh_) return;
-
         const target = this.player_.mesh_.position.clone();
         const offset = this.cameraTargetOffset.clone();
         offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.rotationAngle);
         const cameraPos = target.clone().add(offset);
-        this.camera.position.copy(cameraPos); // Changed from lerp
+        this.camera.position.copy(cameraPos);
         // 머리 위를 바라보게
-        const headOffset = new THREE.Vector3(0, 2, 0); // Added
-        const headPosition = target.clone().add(headOffset); // Added
-        this.camera.lookAt(headPosition); // Changed from target
+        const headOffset = new THREE.Vector3(0, 2, 0);
+        const headPosition = target.clone().add(headOffset);
+        this.camera.lookAt(headPosition);
     }
 
     OnWindowResize() {
@@ -203,17 +210,16 @@ class GameStage3 {
         if (this.player_) {
             this.player_.Update(delta, this.rotationAngle);
             this.UpdateCamera();
-            this.hpUI.updateHP(this.player_.hp_); // Update HP UI
+            this.hpUI.updateHP(this.player_.hp_);
         }
-
         if (this.npc_) {
             this.npc_.Update(delta);
         }
-
         this.renderer.render(this.scene, this.camera);
     }
 }
 
+// 게임 인스턴스 생성
 let game = null;
 window.addEventListener('DOMContentLoaded', () => {
     game = new GameStage3();

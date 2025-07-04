@@ -1,6 +1,7 @@
 // object.js
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.124/build/three.module.js';
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.124/examples/jsm/loaders/GLTFLoader.js';
+
 export const object = (() => {
 
   class NPC {
@@ -13,7 +14,7 @@ export const object = (() => {
     LoadModel_(position) {
       const loader = new GLTFLoader();
       loader.setPath('./resources/char/glTF/');
-      loader.load('Casual_Bald.gltf', (gltf) => {
+      loader.load('VikingHelmet.gltf', (gltf) => {
         const model = gltf.scene;
         model.scale.setScalar(1);
         model.position.copy(position);
