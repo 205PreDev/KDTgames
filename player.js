@@ -1,7 +1,7 @@
 // player.js
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.124/build/three.module.js';
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.124/examples/jsm/loaders/GLTFLoader.js';
-import { Weapon } from './weapon.js';
+import { Item } from './item.js';
 import * as map from './map.js';
 
 export const player = (() => {
@@ -29,6 +29,7 @@ export const player = (() => {
         ctrl_key: false,
       };
       this.inventory_ = [];
+      this.equippedWeapon_ = null;
       this.jumpPower_ = 12;
       this.gravity_ = -30;
       this.isJumping_ = false;
@@ -214,7 +215,6 @@ export const player = (() => {
       });
 
       if (closestWeapon) {
-        this.inventory_.push(closestWeapon);
         this.params_.scene.remove(closestWeapon.model_);
         if (typeof closestWeapon.HideRangeIndicator === 'function') {
           closestWeapon.HideRangeIndicator();
@@ -224,20 +224,31 @@ export const player = (() => {
           this.params_.weapons.splice(index, 1);
         }
         console.log('무기 획득:', closestWeapon);
-        this.EquipWeapon(closestWeapon);
+        this.EquipItem(closestWeapon);
       }
     }
 
-    EquipWeapon(weapon) {
+    EquipItem(item) {
+      if (this.equippedWeapon_) {
+        // 기존 무기 해제
+        if (this.equippedWeapon_.model_ && this.equippedWeapon_.model_.parent) {
+          this.equippedWeapon_.model_.parent.remove(this.equippedWeapon_.model_);
+        }
+        // 해제된 무기를 다시 맵에 추가 (선택 사항, 현재는 그냥 사라지게 둠)
+        // this.params_.scene.add(this.equippedWeapon_.model_);
+        // this.params_.weapons.push(this.equippedWeapon_); // 다시 획득 가능한 무기 목록에 추가
+      }
+
       const handBone = this.mesh_.getObjectByName('FistR') || this.mesh_.getObjectByName('HandR');
-      if (handBone && weapon.model_) {
-        handBone.add(weapon.model_);
-        weapon.model_.position.set(0, 0, 0.1);
-        weapon.model_.rotation.set(0, 0, 0);
-        weapon.model_.position.x = -0.01;
-        weapon.model_.position.y = 0.09;
-        weapon.model_.rotation.x = Math.PI / 2;
-        weapon.model_.rotation.y = Math.PI / 2;
+      if (handBone && item.model_) {
+        handBone.add(item.model_);
+        item.model_.position.set(0, 0, 0.1);
+        item.model_.rotation.set(0, 0, 0);
+        item.model_.position.x = -0.01;
+        item.model_.position.y = 0.09;
+        item.model_.rotation.x = Math.PI / 2;
+        item.model_.rotation.y = Math.PI / 2;
+        this.equippedWeapon_ = item; // 현재 장착 아이템 업데이트
       }
     }
 

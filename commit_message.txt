@@ -1,5 +1,0 @@
-refactor: Move Weapon class to weapon.js and fix import errors
-
-- Moved the Weapon class from object.js to a new file, weapon.js, for better modularity.
-- Updated import statements in main.js and player.js to reflect the new weapon.js module.
-- Fixed 'Cannot access weapon before initialization' error by changing weapon.js to directly export the Weapon class.

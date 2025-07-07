@@ -1,8 +1,8 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.124/build/three.module.js';
 import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.124/examples/jsm/controls/OrbitControls.js';
-import { Weapon } from './weapon.js';
 import { player } from './player.js';
 import { object } from './object.js';
+import { Item } from './item.js';
 import { math } from './math.js';
 import { ui } from './ui.js';
 import { hp } from './hp.js';
@@ -166,11 +166,15 @@ class GameStage3 {
 
     CreateWeapons() {
         this.weapons_ = [];
-        const weaponNames = ['Sword.fbx', 'Axe_Double.fbx', 'Bow_Wooden.fbx', 'Dagger.fbx', 'Hammer_Double.fbx'];
-        for (let i = 0; i < 5; i++) {
+        const weaponNames = [
+            'Sword.fbx', 'Axe_Double.fbx', 'Bow_Wooden.fbx', 'Dagger.fbx', 'Hammer_Double.fbx',
+            'Axe_Double_Golden.fbx', 'Axe_small_Golden.fbx', 'Bow_Golden.fbx', 'Dagger_Golden.fbx',
+            'Hammer_Double_Golden.fbx', 'Sword_big_Golden.fbx', 'Sword_big.fbx', 'Sword_Golden.fbx'
+        ];
+        for (let i = 0; i < weaponNames.length; i++) {
             const weaponName = weaponNames[i];
             const pos = new THREE.Vector3(math.rand_int(-20, 20), 1, math.rand_int(-20, 20));
-            const weapon = new Weapon(this.scene, weaponName, pos);
+            const weapon = new Item(this.scene, weaponName, pos);
             this.weapons_.push(weapon);
         }
     }

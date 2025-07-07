@@ -1,19 +1,19 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.124/build/three.module.js';
 import { FBXLoader } from 'https://cdn.jsdelivr.net/npm/three@0.124/examples/jsm/loaders/FBXLoader.js';
 
-export class Weapon {
-  constructor(scene, weaponName, position = new THREE.Vector3(0, 0, 0)) {
+export class Item {
+  constructor(scene, itemName, position = new THREE.Vector3(0, 0, 0)) {
     this.scene_ = scene;
     this.model_ = null; // 모델을 저장할 속성 추가
     this.rangeIndicator_ = null; // 범위 표시 원 추가
-    this.LoadModel_(weaponName, position);
+    this.LoadModel_(itemName, position);
     this.CreateRangeIndicator_();
   }
 
-  LoadModel_(weaponName, position) {
+  LoadModel_(itemName, position) {
     const loader = new FBXLoader();
-    loader.setPath('./resources/weapon/FBX/');
-    loader.load(weaponName, (fbx) => {
+    loader.setPath('./resources/weapon/FBX/'); // 무기/도구 FBX는 여기에 있다고 가정
+    loader.load(itemName, (fbx) => {
       const model = fbx;
       model.scale.setScalar(0.01);
       model.position.copy(position);
@@ -50,5 +50,11 @@ export class Weapon {
       if (this.rangeIndicator_) {
           this.rangeIndicator_.visible = false;
       }
+  }
+
+  // 도구 기능을 위한 플레이스홀더
+  use(player) {
+    console.log(`${this.itemName} used by ${player.name}`);
+    // 여기에 도구별 사용 로직 추가
   }
 }
