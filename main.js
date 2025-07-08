@@ -9,13 +9,15 @@ import { hp } from './hp.js';
 
 // 전역에서 한 번만 생성
 const gameUI = new ui.GameUI();
-const hpUI = new hp.HPUI();
-hpUI.setGameUI(gameUI); // 반드시 연결!
+const playerHpUI = new hp.HPUI();
+playerHpUI.setGameUI(gameUI); // 반드시 연결!
+const npcHpUI = new hp.HPUI(true);
 
 class GameStage3 {
     constructor() {
         // 이미 생성된 hpUI를 사용
-        this.hpUI = hpUI;
+        this.playerHpUI = playerHpUI;
+        this.npcHpUI = npcHpUI;
         this.Initialize();
         this.RAF();
     }
@@ -49,6 +51,17 @@ class GameStage3 {
         this.CreateGround();
         this.CreateWeapons();
         this.CreatePlayer();
+
+        this.CreateCoordinateDisplays();
+
+        // 'R' 키를 눌렀을 때 NPC 공격
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'KeyR') {
+                if (this.npc_ && typeof this.npc_.startAttack === 'function') {
+                    this.npc_.startAttack();
+                }
+            }
+        });
 
         window.addEventListener('resize', () => this.OnWindowResize(), false);
     }
@@ -137,14 +150,15 @@ class GameStage3 {
         // 플레이어 생성 및 HP UI 연결
         this.player_ = new player.Player({
             scene: this.scene,
-            hpUI: this.hpUI,
+            hpUI: this.playerHpUI,
             weapons: this.weapons_
         });
-        this.hpUI.setPlayer(this.player_);
+        this.playerHpUI.setTarget(this.player_);
 
         // NPC 생성
         const npcPos = new THREE.Vector3(0, 0, -4);
         this.npc_ = new object.NPC(this.scene, npcPos);
+        this.npcHpUI.setTarget(this.npc_);
 
         // 카메라 오프셋 및 회전
         this.cameraTargetOffset = new THREE.Vector3(0, 15, 10);
@@ -156,18 +170,52 @@ class GameStage3 {
         // 캐릭터 모델 로딩 후 얼굴 이미지 추출해서 HP UI에 반영
         const checkAndRenderFace = () => {
             if (this.player_ && this.player_.mesh_) {
-                this.hpUI.renderCharacterFaceToProfile(this.player_.mesh_, this.scene, this.renderer);
+                this.playerHpUI.renderCharacterFaceToProfile(this.player_.mesh_, this.scene, this.renderer);
             } else {
                 setTimeout(checkAndRenderFace, 100);
             }
         };
         checkAndRenderFace();
+
+        const checkAndRenderNPCFace = () => {
+            if (this.npc_ && this.npc_.model_) {
+                this.npcHpUI.renderCharacterFaceToProfile(this.npc_.model_, this.scene, this.renderer);
+            } else {
+                setTimeout(checkAndRenderNPCFace, 100);
+            }
+        };
+        checkAndRenderNPCFace();
+    }
+
+    CreateCoordinateDisplays() {
+        const style = {
+            position: 'absolute',
+            background: 'rgba(0, 0, 0, 0.6)',
+            color: '#fff',
+            padding: '5px 10px',
+            borderRadius: '5px',
+            fontFamily: 'monospace',
+            fontSize: '12px',
+            zIndex: '1000',
+            pointerEvents: 'none',
+            userSelect: 'none',
+            transform: 'translate(-50%, -50%)'
+        };
+
+        this.playerCoordDisplay = document.createElement('div');
+        Object.assign(this.playerCoordDisplay.style, style);
+        document.body.appendChild(this.playerCoordDisplay);
+
+        this.npcCoordDisplay = document.createElement('div');
+        Object.assign(this.npcCoordDisplay.style, style);
+        document.body.appendChild(this.npcCoordDisplay);
     }
 
     CreateWeapons() {
         this.weapons_ = [];
         const weaponNames = [
             'Sword.fbx', 'Axe_Double.fbx', 'Bow_Wooden.fbx', 'Dagger.fbx', 'Hammer_Double.fbx',
+            'AssaultRifle_1.fbx', 'Pistol_1.fbx', 'Shotgun_1.fbx', 'SniperRifle_1.fbx', 'SubmachineGun_1.fbx',
             'Axe_Double_Golden.fbx', 'Axe_small_Golden.fbx', 'Bow_Golden.fbx', 'Dagger_Golden.fbx',
             'Hammer_Double_Golden.fbx', 'Sword_big_Golden.fbx', 'Sword_big.fbx', 'Sword_Golden.fbx'
         ];
@@ -214,12 +262,100 @@ class GameStage3 {
         if (this.player_) {
             this.player_.Update(delta, this.rotationAngle);
             this.UpdateCamera();
-            this.hpUI.updateHP(this.player_.hp_);
+            this.playerHpUI.updateHP(this.player_.hp_);
         }
         if (this.npc_) {
             this.npc_.Update(delta);
+            this.npcHpUI.updateHP(this.npc_.health_);
         }
+
+        this.UpdateCoordinateDisplays();
+
         this.renderer.render(this.scene, this.camera);
+        this.UpdateCombat(delta);
+    }
+
+    UpdateCombat(delta) {
+        if (!this.player_ || !this.player_.mesh_ || !this.npc_ || !this.npc_.model_) {
+            return;
+        }
+
+        const playerPos = new THREE.Vector2(this.player_.mesh_.position.x, this.player_.mesh_.position.z);
+        const npcPos = new THREE.Vector2(this.npc_.model_.position.x, this.npc_.model_.position.z);
+        const distance = playerPos.distanceTo(npcPos);
+
+        if (distance <= 2.0) {
+            // 플레이어가 공격하고, 피해를 줄 수 있는 상태일 때
+            if (this.player_.isAttacking_ && this.player_.canDamage_) {
+                const playerToNpc = this.npc_.model_.position.clone().sub(this.player_.mesh_.position);
+                playerToNpc.y = 0; // XZ 평면에서만 고려
+                playerToNpc.normalize();
+
+                const playerForward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.player_.mesh_.quaternion);
+                playerForward.y = 0; // XZ 평면에서만 고려
+                playerForward.normalize();
+
+                const angle = playerForward.angleTo(playerToNpc);
+
+                if (angle <= this.player_.attackAngle_ / 2) {
+                    this.npc_.TakeDamage(10); // NPC에게 10의 피해
+                    this.player_.canDamage_ = false; // 한 번의 공격에 한 번만 피해를 주도록 설정
+                    console.log(`Player attacks NPC! NPC HP: ${this.npc_.health_}`);
+                }
+            }
+
+            // NPC가 공격하고, 피해를 줄 수 있는 상태일 때
+            if (this.npc_.isAttacking_ && this.npc_.canDamage_) {
+                const npcToPlayer = this.player_.mesh_.position.clone().sub(this.npc_.model_.position);
+                npcToPlayer.y = 0; // XZ 평면에서만 고려
+                npcToPlayer.normalize();
+
+                const npcForward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.npc_.model_.quaternion);
+                npcForward.y = 0; // XZ 평면에서만 고려
+                npcForward.normalize();
+
+                const angle = npcForward.angleTo(npcToPlayer);
+
+                if (angle <= this.npc_.attackAngle_ / 2) {
+                    this.player_.TakeDamage(20); // 플레이어에게 20의 피해
+                    this.npc_.canDamage_ = false; // 한 번의 공격에 한 번만 피해를 주도록 설정
+                    console.log(`NPC attacks Player! Player HP: ${this.player_.hp_}`);
+                }
+            }
+        }
+    }
+
+    UpdateCoordinateDisplays() {
+        if (this.player_ && this.player_.mesh_) {
+            this.UpdateCoordDisplay(this.playerCoordDisplay, this.player_.mesh_, this.player_.headBone, 2.0);
+        }
+        if (this.npc_ && this.npc_.model_) {
+            this.UpdateCoordDisplay(this.npcCoordDisplay, this.npc_.model_, this.npc_.headBone, 2.0);
+        }
+    }
+
+    UpdateCoordDisplay(element, model, headBone, heightOffset) {
+        const pos = new THREE.Vector3();
+        if (headBone) {
+            headBone.getWorldPosition(pos);
+        } else {
+            pos.copy(model.position);
+        }
+        pos.y += heightOffset; // 머리 위로 오프셋
+
+        pos.project(this.camera);
+
+        const width = window.innerWidth, height = window.innerHeight;
+        const widthHalf = width / 2, heightHalf = height / 2;
+
+        pos.x = (pos.x * widthHalf) + widthHalf;
+        pos.y = - (pos.y * heightHalf) + heightHalf;
+
+        element.style.top = `${pos.y}px`;
+        element.style.left = `${pos.x}px`;
+
+        const worldPos = model.position;
+        element.textContent = `X: ${worldPos.x.toFixed(1)}, Y: ${worldPos.y.toFixed(1)}, Z: ${worldPos.z.toFixed(1)}`;
     }
 }
 

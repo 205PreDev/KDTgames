@@ -1,16 +1,22 @@
 // hp.js
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.124/build/three.module.js';
+import { player } from './player.js';
 
 export const hp = (() => {
   class HPUI {
-    constructor() {
+    constructor(isNPC = false) {
       // ===============================
       // HP 바 UI 생성
       // ===============================
       this.hpBarContainer = document.createElement('div');
       this.hpBarContainer.style.position = 'absolute';
-      this.hpBarContainer.style.right = '30px';
-      this.hpBarContainer.style.bottom = '30px';
+      if (isNPC) {
+        this.hpBarContainer.style.left = '30px';
+        this.hpBarContainer.style.top = '30px';
+      } else {
+        this.hpBarContainer.style.right = '30px';
+        this.hpBarContainer.style.bottom = '30px';
+      }
       this.hpBarContainer.style.zIndex = '200';
       this.hpBarContainer.style.display = 'flex';
       this.hpBarContainer.style.flexDirection = 'row';
@@ -73,7 +79,7 @@ export const hp = (() => {
 
       // 플레이어 이름
       this.hpName = document.createElement('div');
-      this.hpName.innerText = '김기찬';
+      this.hpName.innerText = isNPC ? 'Viking' : '김기찬';
       this.hpName.style.color = '#bfe8ff';
       this.hpName.style.fontWeight = 'bold';
       this.hpName.style.fontSize = '17px';
@@ -93,103 +99,106 @@ export const hp = (() => {
       this.hpBarContainer.appendChild(this.hpTextBarWrapper);
       document.body.appendChild(this.hpBarContainer);
 
-      // 사망 오버레이 (상단: "또 죽었어?", 중앙: 카운트다운)
-      this.overlay = document.createElement('div');
-      this.overlay.style.position = 'fixed';
-      this.overlay.style.top = '0';
-      this.overlay.style.left = '0';
-      this.overlay.style.width = '100vw';
-      this.overlay.style.height = '100vh';
-      this.overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-      this.overlay.style.zIndex = '999';
-      this.overlay.style.display = 'flex';
-      this.overlay.style.flexDirection = 'column';
-      this.overlay.style.justifyContent = 'center';
-      this.overlay.style.alignItems = 'center';
-      this.overlay.style.visibility = 'hidden';
+      if (!isNPC) {
+        // 사망 오버레이 (상단: "또 죽었어?", 중앙: 카운트다운)
+        this.overlay = document.createElement('div');
+        this.overlay.style.position = 'fixed';
+        this.overlay.style.top = '0';
+        this.overlay.style.left = '0';
+        this.overlay.style.width = '100vw';
+        this.overlay.style.height = '100vh';
+        this.overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        this.overlay.style.zIndex = '999';
+        this.overlay.style.display = 'flex';
+        this.overlay.style.flexDirection = 'column';
+        this.overlay.style.justifyContent = 'center';
+        this.overlay.style.alignItems = 'center';
+        this.overlay.style.visibility = 'hidden';
 
-      // 오버레이 상단 문구 (열받게, 상단 중앙)
-      this.overlayTopMsg = document.createElement('div');
-      this.overlayTopMsg.innerText = '또 죽었어?';
-      this.overlayTopMsg.style.position = 'absolute';
-      this.overlayTopMsg.style.top = '40px';
-      this.overlayTopMsg.style.left = '50%';
-      this.overlayTopMsg.style.transform = 'translateX(-50%)';
-      this.overlayTopMsg.style.fontSize = '90px';
-      this.overlayTopMsg.style.fontWeight = '900';
-      this.overlayTopMsg.style.fontFamily = "'Impact', 'Arial Black', 'sans-serif'";
-      this.overlayTopMsg.style.color = '#ff2222';
-      this.overlayTopMsg.style.textShadow =
-        '0 0 16px #ff4444, 0 4px 16px #000, 2px 2px 0 #fff, 0 0 2px #fff';
-      this.overlayTopMsg.style.letterSpacing = '2px';
-      this.overlayTopMsg.style.userSelect = 'none';
-      this.overlayTopMsg.style.animation = 'shake 0.5s infinite alternate';
-      this.overlay.appendChild(this.overlayTopMsg);
+        // 오버레이 상단 문구 (열받게, 상단 중앙)
+        this.overlayTopMsg = document.createElement('div');
+        this.overlayTopMsg.innerText = '또 죽었어?';
+        this.overlayTopMsg.style.position = 'absolute';
+        this.overlayTopMsg.style.top = '40px';
+        this.overlayTopMsg.style.left = '50%';
+        this.overlayTopMsg.style.transform = 'translateX(-50%)';
+        this.overlayTopMsg.style.fontSize = '90px';
+        this.overlayTopMsg.style.fontWeight = '900';
+        this.overlayTopMsg.style.fontFamily = 'Impact', 'Arial Black', 'sans-serif';
+        this.overlayTopMsg.style.color = '#ff2222';
+        this.overlayTopMsg.style.textShadow =
+          '0 0 16px #ff4444, 0 4px 16px #000, 2px 2px 0 #fff, 0 0 2px #fff';
+        this.overlayTopMsg.style.letterSpacing = '2px';
+        this.overlayTopMsg.style.userSelect = 'none';
+        this.overlayTopMsg.style.animation = 'shake 0.5s infinite alternate';
+        this.overlay.appendChild(this.overlayTopMsg);
 
-      // CSS 애니메이션(흔들림 효과) 추가
-      const style = document.createElement('style');
-      style.innerHTML = `
-@keyframes shake {
-  0% { transform: translateX(-50%) rotate(-2deg); }
-  100% { transform: translateX(-50%) rotate(2deg); }
-}`;
-      document.head.appendChild(style);
+        // CSS 애니메이션(흔들림 효과) 추가
+        const style = document.createElement('style');
+        style.innerHTML = `
+  @keyframes shake {
+    0% { transform: translateX(-50%) rotate(-2deg); }
+    100% { transform: translateX(-50%) rotate(2deg); }
+  }`;
+        document.head.appendChild(style);
 
-      // 오버레이 중앙 카운트다운
-      this.overlayCountdown = document.createElement('div');
-      this.overlayCountdown.innerText = '3';
-      this.overlayCountdown.style.fontSize = '150px';
-      this.overlayCountdown.style.fontWeight = 'bold';
-      this.overlayCountdown.style.color = '#000000';
-      this.overlayCountdown.style.textShadow = '2px 2px 8px #000';
-      this.overlayCountdown.style.marginBottom = '0';
-      this.overlayCountdown.style.marginTop = '0';
-      this.overlay.appendChild(this.overlayCountdown);
+        // 오버레이 중앙 카운트다운
+        this.overlayCountdown = document.createElement('div');
+        this.overlayCountdown.innerText = '3';
+        this.overlayCountdown.style.fontSize = '150px';
+        this.overlayCountdown.style.fontWeight = 'bold';
+        this.overlayCountdown.style.color = '#000000';
+        this.overlayCountdown.style.textShadow = '2px 2px 8px #000';
+        this.overlayCountdown.style.marginBottom = '0';
+        this.overlayCountdown.style.marginTop = '0';
+        this.overlay.appendChild(this.overlayCountdown);
 
-      document.body.appendChild(this.overlay);
+        document.body.appendChild(this.overlay);
 
-      // 피격 효과 빨간 화면
-      this.hitEffect = document.createElement('div');
-      this.hitEffect.style.position = 'fixed';
-      this.hitEffect.style.top = '0';
-      this.hitEffect.style.left = '0';
-      this.hitEffect.style.width = '100vw';
-      this.hitEffect.style.height = '100vh';
-      this.hitEffect.style.backgroundColor = 'rgba(255, 0, 0, 0.25)';
-      this.hitEffect.style.zIndex = '998';
-      this.hitEffect.style.pointerEvents = 'none';
-      this.hitEffect.style.opacity = '0';
-      this.hitEffect.style.transition = 'opacity 0.1s ease-out';
-      document.body.appendChild(this.hitEffect);
+        // 피격 효과 빨간 화면
+        this.hitEffect = document.createElement('div');
+        this.hitEffect.style.position = 'fixed';
+        this.hitEffect.style.top = '0';
+        this.hitEffect.style.left = '0';
+        this.hitEffect.style.width = '100vw';
+        this.hitEffect.style.height = '100vh';
+        this.hitEffect.style.backgroundColor = 'rgba(255, 0, 0, 0.25)';
+        this.hitEffect.style.zIndex = '998';
+        this.hitEffect.style.pointerEvents = 'none';
+        this.hitEffect.style.opacity = '0';
+        this.hitEffect.style.transition = 'opacity 0.1s ease-out';
+        document.body.appendChild(this.hitEffect);
+
+        this.isDead = false;
+        this.deathTimer = null;
+        this.countdownTimer = null; // 카운트다운 타이머
+        this._ctrlPressed = false;
+        this.lastHp = 100;
+
+        // K/D UI 연동
+        this.gameUI = null; // 외부에서 setGameUI로 연결
+
+        window.addEventListener('keydown', (e) => {
+          if ((e.code === 'ControlLeft' || e.code === 'ControlRight') && !this._ctrlPressed && !this.isDead) {
+            this._ctrlPressed = true;
+            if (this.player && typeof this.player.TakeDamage === 'function') {
+              this.player.TakeDamage(10);
+            }
+          }
+        });
+
+        window.addEventListener('keyup', (e) => {
+          if (e.code === 'ControlLeft' || e.code === 'ControlRight') {
+            this._ctrlPressed = false;
+          }
+        });
+      }
 
       this.player = null;
-      this.isDead = false;
-      this.deathTimer = null;
-      this.countdownTimer = null; // 카운트다운 타이머
-      this._ctrlPressed = false;
-      this.lastHp = 100;
-
-      // K/D UI 연동
-      this.gameUI = null; // 외부에서 setGameUI로 연결
-
-      window.addEventListener('keydown', (e) => {
-        if ((e.code === 'ControlLeft' || e.code === 'ControlRight') && !this._ctrlPressed && !this.isDead) {
-          this._ctrlPressed = true;
-          if (this.player && typeof this.player.TakeDamage === 'function') {
-            this.player.TakeDamage(10);
-          }
-        }
-      });
-
-      window.addEventListener('keyup', (e) => {
-        if (e.code === 'ControlLeft' || e.code === 'ControlRight') {
-          this._ctrlPressed = false;
-        }
-      });
     }
 
-    setPlayer(player) {
-      this.player = player;
+    setTarget(target) {
+      this.target = target;
     }
 
     // K/D UI 연동용
@@ -198,10 +207,12 @@ export const hp = (() => {
     }
 
     flashHitEffect() {
-      this.hitEffect.style.opacity = '1';
-      setTimeout(() => {
-        this.hitEffect.style.opacity = '0';
-      }, 100);
+      if (this.hitEffect) {
+        this.hitEffect.style.opacity = '1';
+        setTimeout(() => {
+          this.hitEffect.style.opacity = '0';
+        }, 100);
+      }
     }
 
     showDeathOverlay() {
@@ -245,7 +256,7 @@ export const hp = (() => {
     }
 
     updateHP(hp) {
-      const maxHp = 100;
+      const maxHp = this.target instanceof player.Player ? 100 : 99999999;
       const percent = Math.max(0, Math.min(1, hp / maxHp));
       this.hpBarFill.style.width = (percent * 100) + '%';
       this.hpNumber.innerText = Math.round(hp);

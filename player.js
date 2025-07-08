@@ -44,9 +44,22 @@ export const player = (() => {
       this.rollCooldownTimer_ = 0;
       this.deathTimer_ = 0;
       this.fallDamageTimer_ = 0;
+      this.swordSlashCooldown_ = 0.5; // 쿨타임 설정 (예: 0.5초)
+      this.swordSlashCooldownTimer_ = 0; // 현재 쿨타임 타이머
+      this.swordSlashDuration_ = 0.5; // SwordSlash 지속 시간
+      this.swordSlashTimer_ = 0; // SwordSlash 타이머
+      this.swordSlashSpeed_ = 18; // SwordSlash 이동 속도
+      this.swordSlashDirection_ = new THREE.Vector3(0, 0, 0); // SwordSlash 방향
+      this.isAttacking_ = false; // 공격 중인지 여부
+      this.canDamage_ = false; // 피해를 줄 수 있는 상태인지 여부
       this.hpUI = params.hpUI || null;
+      this.headBone = null; // 머리 뼈를 저장할 속성
+      this.isPicking_ = false; // 아이템 줍는지 여부
+      this.attackRangeIndicator_ = null;
+      this.attackAngle_ = Math.PI / 2; // 플레이어 공격 부채꼴 각도 (90도)
 
       this.LoadModel_();
+      this.CreateAttackRangeIndicator_();
       this.InitInput_();
     }
 
@@ -110,6 +123,7 @@ export const player = (() => {
         case 'ShiftRight':
           this.keys_.shift = true; break;
         case 'KeyK':
+          if (this.isAttacking_) return; // 공격 중에는 점프 불가
           if (!this.isJumping_ && !this.isRolling_) {
             this.isJumping_ = true;
             this.velocityY_ = this.jumpPower_;
@@ -117,7 +131,27 @@ export const player = (() => {
             console.log('Playing animation:', this.currentAction_ ? this.currentAction_._clip.name : 'None');
           }
           break;
+        case 'KeyJ':
+          if (this.isAttacking_) return; // 공격 중에는 SwordSlash 불가
+          if (
+            !this.isJumping_ &&
+            !this.isRolling_ &&
+            this.animations_['SwordSlash'] &&
+            this.swordSlashCooldownTimer_ <= 0
+          ) {
+            this.isAttacking_ = true;
+            this.canDamage_ = true; // 공격 시작 시 피해를 줄 수 있도록 설정
+            this.swordSlashTimer_ = this.swordSlashDuration_;
+            const moveDir = new THREE.Vector3();
+            this.swordSlashDirection_.copy(moveDir);
+            this.SetAnimation_('SwordSlash');
+            this.ShowAttackRange_(); // 공격 범위 표시
+            this.swordSlashCooldownTimer_ = this.swordSlashCooldown_;
+            console.log('공격');
+          }
+          break;
         case 'KeyL':
+          if (this.isAttacking_) return; // 공격 중에는 구르기 불가
           if (
             !this.isJumping_ &&
             !this.isRolling_ &&
@@ -166,7 +200,7 @@ export const player = (() => {
     LoadModel_() {
       const loader = new GLTFLoader();
       loader.setPath('./resources/char/glTF/');
-      loader.load('cow.gltf', (gltf) => {
+      loader.load('Suit_Male.gltf', (gltf) => {
         const model = gltf.scene;
         model.scale.setScalar(1);
         model.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
@@ -181,9 +215,28 @@ export const player = (() => {
               c.material.color.offsetHSL(0, 0, 0.25);
             }
           }
+          if (c.isBone && c.name === 'Head') {
+            this.headBone = c;
+          }
         });
 
         this.mixer_ = new THREE.AnimationMixer(model);
+
+        this.mixer_.addEventListener('finished', (e) => {
+          if (e.action.getClip().name === 'SwordSlash') {
+            this.isAttacking_ = false;
+            this.canDamage_ = false; // 공격 애니메이션 끝나면 초기화
+            this.HideAttackRange_(); // 공격 범위 숨김
+            // 공격 애니메이션이 끝나면 Idle 또는 Walk/Run 애니메이션으로 전환
+            const isMoving = this.keys_.forward || this.keys_.backward || this.keys_.left || this.keys_.right;
+            const isRunning = isMoving && this.keys_.shift;
+            if (isMoving) {
+                this.SetAnimation_(isRunning ? 'Run' : 'Walk');
+            } else {
+                this.SetAnimation_('Idle');
+            }
+          }
+        });
 
         for (const clip of gltf.animations) {
           this.animations_[clip.name] = this.mixer_.clipAction(clip);
@@ -248,11 +301,51 @@ export const player = (() => {
         item.model_.position.y = 0.09;
         item.model_.rotation.x = Math.PI / 2;
         item.model_.rotation.y = Math.PI / 2;
+        item.model_.rotation.z = Math.PI * 1.5;
         this.equippedWeapon_ = item; // 현재 장착 아이템 업데이트
       }
     }
 
-    SetAnimation_(name) {
+    CreateAttackRangeIndicator_() {
+        const shape = new THREE.Shape();
+        const radius = 2.0; // 공격 범위 반지름
+        const angle = Math.PI / 2; // 90도 부채꼴
+
+        shape.moveTo(0, 0);
+        shape.arc(0, 0, radius, -angle / 2, angle / 2, false);
+        shape.lineTo(0, 0);
+
+        const geometry = new THREE.ShapeGeometry(shape);
+        const material = new THREE.MeshBasicMaterial({
+            color: 0xff0000,
+            transparent: true,
+            opacity: 0.5,
+            side: THREE.DoubleSide
+        });
+
+        this.attackRangeIndicator_ = new THREE.Mesh(geometry, material);
+        this.attackRangeIndicator_.rotation.x = -Math.PI / 2; // 바닥에 눕힘
+        this.attackRangeIndicator_.visible = false; // 기본적으로 숨김
+        this.params_.scene.add(this.attackRangeIndicator_);
+    }
+
+    ShowAttackRange_() {
+        if (!this.attackRangeIndicator_ || !this.mesh_) return;
+
+        // 플레이어 위치와 방향에 맞게 표시자 업데이트
+        this.attackRangeIndicator_.position.set(this.mesh_.position.x, 0.1, this.mesh_.position.z); // Y 좌표 고정
+        this.attackRangeIndicator_.quaternion.copy(this.mesh_.quaternion);
+
+        this.attackRangeIndicator_.visible = true;
+    }
+
+    HideAttackRange_() {
+        if (this.attackRangeIndicator_) {
+            this.attackRangeIndicator_.visible = false;
+        }
+    }
+
+   SetAnimation_(name) {
       if (this.currentAction_ === this.animations_[name]) return;
       if (!this.animations_[name]) {
         console.warn(`Animation ${name} not found!`);
@@ -263,6 +356,33 @@ export const player = (() => {
       }
       this.currentAction_ = this.animations_[name];
       this.currentAction_.reset().fadeIn(0.3).play();
+
+      // --- 무기 자세 제어 로직 ---
+      if (this.equippedWeapon_ && this.equippedWeapon_.model_) {
+        const weapon = this.equippedWeapon_.model_;
+        switch (name) {
+          case 'SwordSlash':
+            weapon.position.set(-0.05, 0.05, -0.1);
+            weapon.rotation.set(Math.PI / 2, Math.PI / 2, 0); // Default rotation, will be overridden by Update
+            break;
+
+          case 'Idle':
+          case 'Walk':
+          case 'Run':
+            // 평상시 자세: 기본 장착 위치
+            weapon.position.set(-0.01, 0.09, 0.1);
+            weapon.rotation.set(Math.PI / 2, Math.PI / 2, 0);
+            break;
+
+          default:
+            // 기타 애니메이션(점프, 구르기 등)에서도 평상시 자세 유지
+            weapon.position.set(-0.01, 0.09, 0.1);
+            weapon.rotation.set(Math.PI / 2, Math.PI / 2, 0);
+            break;
+        }
+      }
+      // --- 무기 자세 제어 로직 끝 ---
+
       if (name === 'Jump') {
         this.currentAction_.setLoop(THREE.LoopOnce);
         this.currentAction_.clampWhenFinished = true;
@@ -278,6 +398,11 @@ export const player = (() => {
         this.currentAction_.clampWhenFinished = true;
         this.currentAction_.time = 0.0;
         this.currentAction_.timeScale = 1.0;
+      } else if (name === 'SwordSlash') {
+        this.currentAction_.setLoop(THREE.LoopOnce);
+        this.currentAction_.clampWhenFinished = true;
+        this.currentAction_.time = 0; // 10번째 프레임부터 시작 (24 FPS 가정)
+        this.currentAction_.timeScale = 1.2; // 구르기와 유사하게 속도 조절
       } else {
         this.currentAction_.timeScale = 1.0;
       }
@@ -317,22 +442,61 @@ export const player = (() => {
         if (this.rollCooldownTimer_ < 0) this.rollCooldownTimer_ = 0;
       }
 
-      if (this.isRolling_) {
-    this.rollTimer_ -= timeElapsed;
-    const rollMove = this.rollDirection_.clone().multiplyScalar(this.rollSpeed_ * timeElapsed);
-    this.position_.add(rollMove);
+      // SwordSlash 쿨타임 관리
+      if (this.swordSlashCooldownTimer_ > 0) {
+        this.swordSlashCooldownTimer_ -= timeElapsed;
+        if (this.swordSlashCooldownTimer_ < 0) this.swordSlashCooldownTimer_ = 0;
+      }
 
-    if (this.rollTimer_ <= 0) {
-        this.isRolling_ = false;
-        const isMoving = this.keys_.forward || this.keys_.backward || this.keys_.left || this.keys_.right;
-        const isRunning = isMoving && this.keys_.shift;
-        if (isMoving) {
-            this.SetAnimation_(isRunning ? 'Run' : 'Walk');
-        } else {
-            this.SetAnimation_('Idle');
+      // SwordSlash 이동 로직 (다른 이동과 병행 가능)
+      if (this.isAttacking_) {
+        this.swordSlashTimer_ -= timeElapsed;
+        const slashMove = this.swordSlashDirection_.clone().multiplyScalar(this.swordSlashSpeed_ * timeElapsed);
+        this.position_.add(slashMove);
+
+        // 무기 회전 로직
+        if (this.equippedWeapon_ && this.equippedWeapon_.model_ && this.currentAction_ && this.currentAction_._clip.name === 'SwordSlash') {
+            const weapon = this.equippedWeapon_.model_;
+            const currentAnimationTime = this.currentAction_.time;
+            const currentFrame = currentAnimationTime * 24; // 24 FPS 가정
+
+            let targetRotationX = Math.PI / 2; // 기본 수평
+            
+            if (currentFrame >= 11 && currentFrame < 17) {
+                // 11 ~ 16 프레임: 안쪽으로 꺾임
+                const startFrame = 11;
+                const endFrame = 16;
+                const progress = (currentFrame - startFrame) / (endFrame - startFrame);
+                targetRotationX = THREE.MathUtils.lerp(Math.PI / 2, Math.PI / 2 + Math.PI / 8, progress);
+            } else if (currentFrame >= 17) {
+                // 17 프레임 이후: 오른쪽으로 꺾임
+                const startFrame = 17;
+                const endFrame = 25; // 애니메이션 끝 프레임
+                const progress = (currentFrame - startFrame) / (endFrame - startFrame);
+                targetRotationX = THREE.MathUtils.lerp(Math.PI / 2 + Math.PI / 8, Math.PI / 2 - Math.PI / 8, progress);
+            }
+            weapon.rotation.set(targetRotationX, Math.PI / 2, 0);
         }
-    }
-} else {
+
+        if (this.swordSlashTimer_ <= 0) {
+            this.isAttacking_ = false;
+        }
+      }
+
+      // 구르기 이동 로직 (다른 이동과 배타적)
+      if (this.isRolling_) {
+        this.rollTimer_ -= timeElapsed;
+        const rollMove = this.rollDirection_.clone().multiplyScalar(this.rollSpeed_ * timeElapsed);
+        this.position_.add(rollMove);
+
+        if (this.rollTimer_ <= 0) {
+            this.isRolling_ = false;
+        }
+      }
+
+      // 일반 이동 로직 (구르기 중이 아닐 때만 적용)
+      let currentSpeed = 0;
+      if (!this.isRolling_) {
         const velocity = new THREE.Vector3();
         const forward = new THREE.Vector3(0, 0, -1);
         const right = new THREE.Vector3(1, 0, 0);
@@ -341,22 +505,20 @@ export const player = (() => {
         if (this.keys_.left) velocity.sub(right);
         if (this.keys_.right) velocity.add(right);
         velocity.applyAxisAngle(new THREE.Vector3(0, 1, 0), rotationAngle);
+
         const isMoving = this.keys_.forward || this.keys_.backward || this.keys_.left || this.keys_.right;
         const isRunning = isMoving && this.keys_.shift;
-        const moveSpeed = isRunning ? this.speed_ * 2 : this.speed_;
-        velocity.normalize().multiplyScalar(moveSpeed * timeElapsed);
+        currentSpeed = isRunning ? this.speed_ * 2 : this.speed_;
+        
+        velocity.normalize().multiplyScalar(currentSpeed * timeElapsed);
         this.position_.add(velocity);
+
         this.velocityY_ += this.gravity_ * timeElapsed;
         this.position_.y += this.velocityY_ * timeElapsed;
 
         if (this.position_.y <= 0) {
             this.position_.y = 0;
             this.velocityY_ = 0;
-            if (isMoving) {
-                this.SetAnimation_(isRunning ? 'Run' : 'Walk');
-            } else {
-                this.SetAnimation_('Idle');
-            }
             this.isJumping_ = false;
         }
 
@@ -371,6 +533,26 @@ export const player = (() => {
           );
           this.mesh_.quaternion.slerp(targetQuaternion, 0.3);
         }
+      }
+
+      // 애니메이션 선택 로직 (이동 로직과 분리)
+      if (this.isDead_) {
+          this.SetAnimation_('Death');
+      } else if (this.isRolling_) {
+          this.SetAnimation_('Roll');
+      } else if (this.isJumping_) {
+          this.SetAnimation_('Jump');
+      } else if (this.isPicking_) {
+        this.SetAnimation_('PickUp');
+      }
+       else if (!this.isAttacking_) { // 공격 중이 아닐 때만 이동/대기 애니메이션 처리
+          const isMoving = this.keys_.forward || this.keys_.backward || this.keys_.left || this.keys_.right;
+          const isRunning = isMoving && this.keys_.shift;
+          if (isMoving) {
+              this.SetAnimation_(isRunning ? 'Run' : 'Walk');
+          } else {
+              this.SetAnimation_('Idle');
+          }
       }
 
       this.mesh_.position.copy(this.position_);
