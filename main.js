@@ -7,6 +7,35 @@ import { math } from './math.js';
 import { ui } from './ui.js';
 import { hp } from './hp.js';
 
+// Attack Types
+const ATTACK_TYPE_MELEE = 'melee';
+const ATTACK_TYPE_RANGED = 'ranged';
+
+// Weapon Data (Radius and Angle)
+const WEAPON_DATA = {
+    'Sword.fbx': { type: ATTACK_TYPE_MELEE, radius: 2.0, angle: Math.PI / 3, damage: 20, attackSpeedMultiplier: 1.0, attackType: 'single', specialEffect: null }, // 60 degrees
+    'Axe_Double.fbx': { type: ATTACK_TYPE_MELEE, radius: 2.2, angle: Math.PI / 2.5, damage: 30, attackSpeedMultiplier: 0.8, attackType: 'aoe', specialEffect: 'knockback' }, // 72 degrees
+    'Bow_Wooden.fbx': { type: ATTACK_TYPE_RANGED, radius: 15.0, angle: Math.PI / 18, damage: 10, attackSpeedMultiplier: 1.0, attackType: 'ranged', specialEffect: null }, // 10 degrees (for aiming)
+    'Dagger.fbx': { type: ATTACK_TYPE_MELEE, radius: 1.5, angle: Math.PI / 2, damage: 15, attackSpeedMultiplier: 1.5, attackType: 'single', specialEffect: 'critical_bleed' }, // 90 degrees
+    'Hammer_Double.fbx': { type: ATTACK_TYPE_MELEE, radius: 2.5, angle: Math.PI / 2.2, damage: 40, attackSpeedMultiplier: 0.5, attackType: 'small_aoe', specialEffect: 'stun' }, // ~81 degrees
+
+    'AssaultRifle_1.fbx': { type: ATTACK_TYPE_RANGED, radius: 20.0, angle: Math.PI / 36, damage: 10, attackSpeedMultiplier: 1.0, attackType: 'ranged', specialEffect: null }, // 5 degrees
+    'Pistol_1.fbx': { type: ATTACK_TYPE_RANGED, radius: 10.0, angle: Math.PI / 12, damage: 10, attackSpeedMultiplier: 1.0, attackType: 'ranged', specialEffect: null }, // 15 degrees
+    'Shotgun_1.fbx': { type: ATTACK_TYPE_RANGED, radius: 8.0, angle: Math.PI / 6, damage: 10, attackSpeedMultiplier: 1.0, attackType: 'ranged', specialEffect: null }, // 30 degrees
+    'SniperRifle_1.fbx': { type: ATTACK_TYPE_RANGED, radius: 30.0, angle: Math.PI / 90, damage: 10, attackSpeedMultiplier: 1.0, attackType: 'ranged', specialEffect: null }, // 2 degrees
+    'SubmachineGun_1.fbx': { type: ATTACK_TYPE_RANGED, radius: 12.0, angle: Math.PI / 18, damage: 10, attackSpeedMultiplier: 1.0, attackType: 'ranged', specialEffect: null }, // 10 degrees
+
+    'Axe_Double_Golden.fbx': { type: ATTACK_TYPE_MELEE, radius: 2.4, angle: Math.PI / 2.4, damage: 25, attackSpeedMultiplier: 1.0, attackType: 'single', specialEffect: null },
+    'Axe_small_Golden.fbx': { type: ATTACK_TYPE_MELEE, radius: 1.8, angle: Math.PI / 2.1, damage: 25, attackSpeedMultiplier: 1.0, attackType: 'single', specialEffect: null },
+    'Bow_Golden.fbx': { type: ATTACK_TYPE_RANGED, radius: 18.0, angle: Math.PI / 20, damage: 25, attackSpeedMultiplier: 1.0, attackType: 'ranged', specialEffect: null },
+    'Dagger_Golden.fbx': { type: ATTACK_TYPE_MELEE, radius: 1.7, angle: Math.PI / 1.9, damage: 25, attackSpeedMultiplier: 1.0, attackType: 'single', specialEffect: null },
+    'Hammer_Double_Golden.fbx': { type: ATTACK_TYPE_MELEE, radius: 2.7, angle: Math.PI / 2.1, damage: 25, attackSpeedMultiplier: 1.0, attackType: 'single', specialEffect: null },
+    'Sword_big_Golden.fbx': { type: ATTACK_TYPE_MELEE, radius: 2.8, angle: Math.PI / 3.2, damage: 25, attackSpeedMultiplier: 1.0, attackType: 'single', specialEffect: null },
+    'Sword_big.fbx': { type: ATTACK_TYPE_MELEE, radius: 2.6, angle: Math.PI / 3.1, damage: 20, attackSpeedMultiplier: 0.9, attackType: 'single', specialEffect: null },
+    'Sword_Golden.fbx': { type: ATTACK_TYPE_MELEE, radius: 2.1, angle: Math.PI / 2.9, damage: 25, attackSpeedMultiplier: 1.0, attackType: 'single', specialEffect: null }
+};
+
+
 // 전역에서 한 번만 생성
 const gameUI = new ui.GameUI();
 const playerHpUI = new hp.HPUI();
@@ -222,7 +251,8 @@ class GameStage3 {
         for (let i = 0; i < weaponNames.length; i++) {
             const weaponName = weaponNames[i];
             const pos = new THREE.Vector3(math.rand_int(-20, 20), 1, math.rand_int(-20, 20));
-            const weapon = new Item(this.scene, weaponName, pos);
+            const weaponData = WEAPON_DATA[weaponName];
+            const weapon = new Item(this.scene, weaponName, pos, weaponData.type, weaponData.radius, weaponData.angle, weaponData.damage, weaponData.attackSpeedMultiplier, weaponData.attackType, weaponData.specialEffect);
             this.weapons_.push(weapon);
         }
     }
@@ -284,9 +314,11 @@ class GameStage3 {
         const npcPos = new THREE.Vector2(this.npc_.model_.position.x, this.npc_.model_.position.z);
         const distance = playerPos.distanceTo(npcPos);
 
-        if (distance <= 2.0) {
+        if (distance <= this.player_.currentAttackRadius) {
+            //console.log(`Distance to NPC: ${distance.toFixed(2)}, Player Attack Radius: ${this.player_.currentAttackRadius.toFixed(2)}`);
             // 플레이어가 공격하고, 피해를 줄 수 있는 상태일 때
             if (this.player_.isAttacking_ && this.player_.canDamage_) {
+                console.log(`Player is attacking: ${this.player_.isAttacking_}, Can damage: ${this.player_.canDamage_}`);
                 const playerToNpc = this.npc_.model_.position.clone().sub(this.player_.mesh_.position);
                 playerToNpc.y = 0; // XZ 평면에서만 고려
                 playerToNpc.normalize();
@@ -296,9 +328,10 @@ class GameStage3 {
                 playerForward.normalize();
 
                 const angle = playerForward.angleTo(playerToNpc);
+                console.log(`Angle to NPC: ${(angle * 180 / Math.PI).toFixed(2)} degrees, Player Attack Angle: ${(this.player_.currentAttackAngle * 180 / Math.PI).toFixed(2)} degrees`);
 
-                if (angle <= this.player_.attackAngle_ / 2) {
-                    this.npc_.TakeDamage(10); // NPC에게 10의 피해
+                if (angle <= this.player_.currentAttackAngle / 2) {
+                    this.npc_.TakeDamage(this.player_.currentAttackDamage); // NPC에게 플레이어의 현재 공격력만큼 피해
                     this.player_.canDamage_ = false; // 한 번의 공격에 한 번만 피해를 주도록 설정
                     console.log(`Player attacks NPC! NPC HP: ${this.npc_.health_}`);
                 }

@@ -55,11 +55,13 @@ export const player = (() => {
       this.hpUI = params.hpUI || null;
       this.headBone = null; // 머리 뼈를 저장할 속성
       this.isPicking_ = false; // 아이템 줍는지 여부
-      this.attackRangeIndicator_ = null;
-      this.attackAngle_ = Math.PI / 2; // 플레이어 공격 부채꼴 각도 (90도)
+      this.bareHandAttackRadius = 1.5;
+      this.bareHandAttackAngle = Math.PI / 2; // 90 degrees
+      this.currentAttackRadius = this.bareHandAttackRadius;
+      this.currentAttackAngle = this.bareHandAttackAngle;
+      this.currentAttackDamage = 0;
 
       this.LoadModel_();
-      this.CreateAttackRangeIndicator_();
       this.InitInput_();
     }
 
@@ -145,9 +147,23 @@ export const player = (() => {
             const moveDir = new THREE.Vector3();
             this.swordSlashDirection_.copy(moveDir);
             this.SetAnimation_('SwordSlash');
-            this.ShowAttackRange_(); // 공격 범위 표시
+
+            // Determine attack properties based on equipped weapon
+            if (this.equippedWeapon_) {
+                this.currentAttackRadius = this.equippedWeapon_.attackRadius;
+                this.currentAttackAngle = this.equippedWeapon_.attackAngle;
+                this.currentAttackDamage = this.equippedWeapon_.damage;
+                this.swordSlashCooldown_ = 0.5 / this.equippedWeapon_.attackSpeedMultiplier; // Adjust cooldown based on weapon speed
+            } else {
+                this.currentAttackRadius = this.bareHandAttackRadius;
+                this.currentAttackAngle = this.bareHandAttackAngle;
+                this.currentAttackDamage = 10; // Bare hand damage
+                this.swordSlashCooldown_ = 0.5; // Default bare hand cooldown
+            }
+
             this.swordSlashCooldownTimer_ = this.swordSlashCooldown_;
             console.log('공격');
+            console.log(`Attack Radius: ${this.currentAttackRadius}, Attack Angle: ${this.currentAttackAngle * 180 / Math.PI} degrees, Damage: ${this.currentAttackDamage}`);
           }
           break;
         case 'KeyL':
@@ -226,7 +242,6 @@ export const player = (() => {
           if (e.action.getClip().name === 'SwordSlash') {
             this.isAttacking_ = false;
             this.canDamage_ = false; // 공격 애니메이션 끝나면 초기화
-            this.HideAttackRange_(); // 공격 범위 숨김
             // 공격 애니메이션이 끝나면 Idle 또는 Walk/Run 애니메이션으로 전환
             const isMoving = this.keys_.forward || this.keys_.backward || this.keys_.left || this.keys_.right;
             const isRunning = isMoving && this.keys_.shift;
@@ -282,6 +297,9 @@ export const player = (() => {
     }
 
     EquipItem(item) {
+      console.log('Equipping item:', item);
+      console.log('Item attackRadius:', item.attackRadius);
+      console.log('Item attackAngle:', item.attackAngle);
       if (this.equippedWeapon_) {
         // 기존 무기 해제
         if (this.equippedWeapon_.model_ && this.equippedWeapon_.model_.parent) {
@@ -306,44 +324,7 @@ export const player = (() => {
       }
     }
 
-    CreateAttackRangeIndicator_() {
-        const shape = new THREE.Shape();
-        const radius = 2.0; // 공격 범위 반지름
-        const angle = Math.PI / 2; // 90도 부채꼴
-
-        shape.moveTo(0, 0);
-        shape.arc(0, 0, radius, -angle / 2, angle / 2, false);
-        shape.lineTo(0, 0);
-
-        const geometry = new THREE.ShapeGeometry(shape);
-        const material = new THREE.MeshBasicMaterial({
-            color: 0xff0000,
-            transparent: true,
-            opacity: 0.5,
-            side: THREE.DoubleSide
-        });
-
-        this.attackRangeIndicator_ = new THREE.Mesh(geometry, material);
-        this.attackRangeIndicator_.rotation.x = -Math.PI / 2; // 바닥에 눕힘
-        this.attackRangeIndicator_.visible = false; // 기본적으로 숨김
-        this.params_.scene.add(this.attackRangeIndicator_);
-    }
-
-    ShowAttackRange_() {
-        if (!this.attackRangeIndicator_ || !this.mesh_) return;
-
-        // 플레이어 위치와 방향에 맞게 표시자 업데이트
-        this.attackRangeIndicator_.position.set(this.mesh_.position.x, 0.1, this.mesh_.position.z); // Y 좌표 고정
-        this.attackRangeIndicator_.quaternion.copy(this.mesh_.quaternion);
-
-        this.attackRangeIndicator_.visible = true;
-    }
-
-    HideAttackRange_() {
-        if (this.attackRangeIndicator_) {
-            this.attackRangeIndicator_.visible = false;
-        }
-    }
+    
 
    SetAnimation_(name) {
       if (this.currentAction_ === this.animations_[name]) return;

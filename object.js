@@ -17,10 +17,8 @@ export const object = (() => {
       this.attackCooldown_ = 2.0; // 공격 쿨타임
       this.attackCooldownTimer_ = 0;
       this.headBone = null;
-      this.attackRangeIndicator_ = null;
       this.attackAngle_ = Math.PI / 1.5; // NPC 공격 부채꼴 각도 (120도)
       this.LoadModel_(position);
-      this.CreateAttackRangeIndicator_();
     }
 
     TakeDamage(damage) {
@@ -60,7 +58,6 @@ export const object = (() => {
             this.isAttacking_ = false;
             this.canDamage_ = false;
             this.SetAnimation_('Idle');
-            this.HideAttackRange_();
           }
         });
 
@@ -71,43 +68,7 @@ export const object = (() => {
       });
     }
 
-    CreateAttackRangeIndicator_() {
-        const shape = new THREE.Shape();
-        const radius = 2.5; // NPC 공격 범위 반지름
-        const angle = Math.PI / 1.5; // 120도 부채꼴
-
-        shape.moveTo(0, 0);
-        shape.arc(0, 0, radius, -angle / 2, angle / 2, false);
-        shape.lineTo(0, 0);
-
-        const geometry = new THREE.ShapeGeometry(shape);
-        const material = new THREE.MeshBasicMaterial({
-            color: 0xff0000,
-            transparent: true,
-            opacity: 0.5,
-            side: THREE.DoubleSide
-        });
-
-        this.attackRangeIndicator_ = new THREE.Mesh(geometry, material);
-        this.attackRangeIndicator_.rotation.x = -Math.PI / 2; // 바닥에 눕힘
-        this.attackRangeIndicator_.visible = false; // 기본적으로 숨김
-        this.scene_.add(this.attackRangeIndicator_);
-    }
-
-    ShowAttackRange_() {
-        if (!this.attackRangeIndicator_ || !this.model_) return;
-
-        this.attackRangeIndicator_.position.set(this.model_.position.x, 0.1, this.model_.position.z);
-        this.attackRangeIndicator_.quaternion.copy(this.model_.quaternion);
-
-        this.attackRangeIndicator_.visible = true;
-    }
-
-    HideAttackRange_() {
-        if (this.attackRangeIndicator_) {
-            this.attackRangeIndicator_.visible = false;
-        }
-    }
+    
 
     SetAnimation_(name) {
       // 'Attack' 애니메이션이 없을 경우, 'SwordSlash'로 대체 시도
@@ -145,7 +106,6 @@ export const object = (() => {
       this.attackCooldownTimer_ = this.attackCooldown_;
       // 'Attack' 애니메이션 실행 (모델에 따라 이름이 다를 수 있음)
       this.SetAnimation_('Attack');
-      this.ShowAttackRange_();
     }
 
     Update(timeElapsed) {
