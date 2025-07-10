@@ -2,7 +2,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.124/build/three.mod
 import { FBXLoader } from 'https://cdn.jsdelivr.net/npm/three@0.124/examples/jsm/loaders/FBXLoader.js';
 
 export class Item {
-  constructor(scene, itemName, position = new THREE.Vector3(0, 0, 0), type = 'melee', attackRadius = 1.0, attackAngle = Math.PI / 2, damage = 10, attackSpeedMultiplier = 1.0, attackType = 'single', specialEffect = null) {
+  constructor(scene, itemName, position = new THREE.Vector3(0, 0, 0), type = 'melee', attackRadius = 1.0, attackAngle = Math.PI / 2, damage = 10, attackSpeedMultiplier = 1.0, attackType = 'single', specialEffect = null, statEffect = null) {
     this.itemName = itemName; // Store item name
     this.scene_ = scene;
     this.model_ = null; // 모델을 저장할 속성 추가
@@ -13,7 +13,8 @@ export class Item {
     this.damage = damage;
     this.attackSpeedMultiplier = attackSpeedMultiplier;
     this.attackType = attackType;
-    this.specialEffect = specialEffect;
+    this.specialEffect = specialEffect; // New property
+    this.statEffect = statEffect; // New property
     this.LoadModel_(itemName, position);
     this.CreateRangeIndicator_();
   }

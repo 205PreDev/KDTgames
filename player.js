@@ -17,7 +17,7 @@ export const player = (() => {
       this.mixer_ = null;
       this.animations_ = {};
       this.currentAction_ = null;
-      this.hp_ = 100;
+      this.hp_ = this.maxHp_;
       this.isDead_ = false;
       this.keys_ = {
         forward: false,
@@ -44,22 +44,28 @@ export const player = (() => {
       this.rollCooldownTimer_ = 0;
       this.deathTimer_ = 0;
       this.fallDamageTimer_ = 0;
-      this.swordSlashCooldown_ = 0.5; // 쿨타임 설정 (예: 0.5초)
-      this.swordSlashCooldownTimer_ = 0; // 현재 쿨타임 타이머
-      this.swordSlashDuration_ = 0.5; // SwordSlash 지속 시간
-      this.swordSlashTimer_ = 0; // SwordSlash 타이머
-      this.swordSlashSpeed_ = 18; // SwordSlash 이동 속도
-      this.swordSlashDirection_ = new THREE.Vector3(0, 0, 0); // SwordSlash 방향
+      this.attackCooldown_ = 0.5; // 쿨타임 설정 (예: 0.5초)
+      this.attackCooldownTimer_ = 0; // 현재 쿨타임 타이머
+      this.attackDuration_ = 0.5; // Attack 지속 시간
+      this.attackTimer_ = 0; // Attack 타이머
+      this.attackSpeed_ = 18; // Attack 이동 속도
+      this.attackDirection_ = new THREE.Vector3(0, 0, 0); // Attack 방향
       this.isAttacking_ = false; // 공격 중인지 여부
       this.canDamage_ = false; // 피해를 줄 수 있는 상태인지 여부
       this.hpUI = params.hpUI || null;
       this.headBone = null; // 머리 뼈를 저장할 속성
       this.isPicking_ = false; // 아이템 줍는지 여부
-      this.bareHandAttackRadius = 1.5;
-      this.bareHandAttackAngle = Math.PI / 2; // 90 degrees
-      this.currentAttackRadius = this.bareHandAttackRadius;
-      this.currentAttackAngle = this.bareHandAttackAngle;
+      this.attackedThisFrame_ = false; // 한 프레임에 여러 번 공격하는 것을 방지
+      this.hitEnemies_ = new Set(); // 현재 공격으로 피해를 입은 적들을 추적
+      this.currentAttackRadius = 1.5; // 기본 맨손 공격 반경
+      this.currentAttackAngle = Math.PI / 2; // 기본 맨손 공격 각도 (90 degrees)
       this.currentAttackDamage = 0;
+      // Player Stats
+      this.strength_ = 0;
+      this.agility_ = 0;
+      this.stamina_ = 0;
+      // Derived Stats
+      this.maxHp_ = 100 * (1 + (this.stamina_ * 0.1)); // Initial base HP, will be modified by stamina
 
       this.LoadModel_();
       this.InitInput_();
@@ -89,7 +95,7 @@ export const player = (() => {
     }
 
     Respawn_() {
-      this.hp_ = 100;
+      this.hp_ = this.maxHp_;
       this.isDead_ = false;
       this.deathTimer_ = 0;
       let minX = 0, maxX = 0, minZ = 0, maxZ = 0, minY = 0;
@@ -109,6 +115,21 @@ export const player = (() => {
       this.isRolling_ = false;
       this.rollCooldownTimer_ = 0;
       this.SetAnimation_('Idle');
+    }
+
+    increaseStat(statName, amount) {
+      switch (statName) {
+        case 'strength':
+          this.strength_ += amount;
+          break;
+        case 'agility':
+          this.agility_ += amount;
+          break;
+        case 'stamina':
+          this.stamina_ += amount;
+        default:
+          console.warn(`Unknown stat: ${statName}`);
+      }
     }
 
     OnKeyDown_(event) {
@@ -134,36 +155,21 @@ export const player = (() => {
           }
           break;
         case 'KeyJ':
-          if (this.isAttacking_) return; // 공격 중에는 SwordSlash 불가
+          if (this.isAttacking_) return; // 공격 중에는 Attack 불가
           if (
             !this.isJumping_ &&
             !this.isRolling_ &&
-            this.animations_['SwordSlash'] &&
-            this.swordSlashCooldownTimer_ <= 0
+            this.animations_['SwordSlash'] && // 애니메이션 이름은 그대로 사용
+            this.attackCooldownTimer_ <= 0
           ) {
             this.isAttacking_ = true;
-            this.canDamage_ = true; // 공격 시작 시 피해를 줄 수 있도록 설정
-            this.swordSlashTimer_ = this.swordSlashDuration_;
+            this.attackTimer_ = this.attackDuration_;
             const moveDir = new THREE.Vector3();
-            this.swordSlashDirection_.copy(moveDir);
-            this.SetAnimation_('SwordSlash');
+            this.attackDirection_.copy(moveDir);
+            this.SetAnimation_('SwordSlash'); // 애니메이션 이름은 그대로 사용
+            this.hitEnemies_.clear(); // 새로운 공격 시작 시 hitEnemies 초기화
 
-            // Determine attack properties based on equipped weapon
-            if (this.equippedWeapon_) {
-                this.currentAttackRadius = this.equippedWeapon_.attackRadius;
-                this.currentAttackAngle = this.equippedWeapon_.attackAngle;
-                this.currentAttackDamage = this.equippedWeapon_.damage;
-                this.swordSlashCooldown_ = 0.5 / this.equippedWeapon_.attackSpeedMultiplier; // Adjust cooldown based on weapon speed
-            } else {
-                this.currentAttackRadius = this.bareHandAttackRadius;
-                this.currentAttackAngle = this.bareHandAttackAngle;
-                this.currentAttackDamage = 10; // Bare hand damage
-                this.swordSlashCooldown_ = 0.5; // Default bare hand cooldown
-            }
-
-            this.swordSlashCooldownTimer_ = this.swordSlashCooldown_;
-            console.log('공격');
-            console.log(`Attack Radius: ${this.currentAttackRadius}, Attack Angle: ${this.currentAttackAngle * 180 / Math.PI} degrees, Damage: ${this.currentAttackDamage}`);
+            this.attackCooldownTimer_ = this.attackCooldown_;
           }
           break;
         case 'KeyL':
@@ -242,6 +248,7 @@ export const player = (() => {
           if (e.action.getClip().name === 'SwordSlash') {
             this.isAttacking_ = false;
             this.canDamage_ = false; // 공격 애니메이션 끝나면 초기화
+            this.hitEnemies_.clear(); // 공격 종료 시 hitEnemies 초기화
             // 공격 애니메이션이 끝나면 Idle 또는 Walk/Run 애니메이션으로 전환
             const isMoving = this.keys_.forward || this.keys_.backward || this.keys_.left || this.keys_.right;
             const isRunning = isMoving && this.keys_.shift;
@@ -257,7 +264,6 @@ export const player = (() => {
           this.animations_[clip.name] = this.mixer_.clipAction(clip);
         }
         this.SetAnimation_('Idle');
-        console.log("Available animations:", Object.keys(this.animations_));
       }, undefined, (error) => {
         console.error("Error loading model:", error);
       });
@@ -291,23 +297,32 @@ export const player = (() => {
         if (index > -1) {
           this.params_.weapons.splice(index, 1);
         }
-        console.log('무기 획득:', closestWeapon);
         this.EquipItem(closestWeapon);
       }
     }
 
     EquipItem(item) {
-      console.log('Equipping item:', item);
-      console.log('Item attackRadius:', item.attackRadius);
-      console.log('Item attackAngle:', item.attackAngle);
+
+      if (item.type === 'buff' && item.statEffect) {
+        this.increaseStat(item.statEffect.stat, item.statEffect.amount);
+        // Remove the item from the scene (it's consumed)
+        if (item.model_ && item.model_.parent) {
+          item.model_.parent.remove(item.model_);
+        }
+        return; // Item consumed, no need to proceed with equipping logic
+      }
+
+      // If we reach here, it's a weapon (melee or ranged)
       if (this.equippedWeapon_) {
-        // 기존 무기 해제
+        // Unequip the existing weapon
         if (this.equippedWeapon_.model_ && this.equippedWeapon_.model_.parent) {
           this.equippedWeapon_.model_.parent.remove(this.equippedWeapon_.model_);
         }
-        // 해제된 무기를 다시 맵에 추가 (선택 사항, 현재는 그냥 사라지게 둠)
-        // this.params_.scene.add(this.equippedWeapon_.model_);
-        // this.params_.weapons.push(this.equippedWeapon_); // 다시 획득 가능한 무기 목록에 추가
+        // Reset to bare hand attack properties
+        this.currentAttackRadius = 1.5;
+        this.currentAttackAngle = Math.PI / 2;
+        this.currentAttackDamage = 10;
+        this.attackCooldown_ = 0.5 * (1 - (this.agility_ * 0.1)); // Default bare hand cooldown, adjusted by agility
       }
 
       const handBone = this.mesh_.getObjectByName('FistR') || this.mesh_.getObjectByName('HandR');
@@ -320,7 +335,13 @@ export const player = (() => {
         item.model_.rotation.x = Math.PI / 2;
         item.model_.rotation.y = Math.PI / 2;
         item.model_.rotation.z = Math.PI * 1.5;
-        this.equippedWeapon_ = item; // 현재 장착 아이템 업데이트
+        this.equippedWeapon_ = item; // Update currently equipped item
+
+        // Update attack properties based on the newly equipped weapon
+        this.currentAttackRadius = this.equippedWeapon_.attackRadius;
+        this.currentAttackAngle = this.equippedWeapon_.attackAngle;
+        this.currentAttackDamage = this.equippedWeapon_.damage;
+        this.attackCooldown_ = (0.5 / this.equippedWeapon_.attackSpeedMultiplier) * (1 - (this.agility_ * 0.1));
       }
     }
 
@@ -382,8 +403,9 @@ export const player = (() => {
       } else if (name === 'SwordSlash') {
         this.currentAction_.setLoop(THREE.LoopOnce);
         this.currentAction_.clampWhenFinished = true;
-        this.currentAction_.time = 0; // 10번째 프레임부터 시작 (24 FPS 가정)
+        this.currentAction_.time = 0.17; // 10번째 프레임부터 시작 (24 FPS 가정)
         this.currentAction_.timeScale = 1.2; // 구르기와 유사하게 속도 조절
+        this.currentAction_.setDuration(this.attackDuration_); // attackDuration_에 맞춰 애니메이션 길이 설정
       } else {
         this.currentAction_.timeScale = 1.0;
       }
@@ -392,6 +414,7 @@ export const player = (() => {
     Update(timeElapsed, rotationAngle = 0) {
       if (!this.mesh_) return;
       this.lastRotationAngle_ = rotationAngle;
+      this.attackedThisFrame_ = false; // 매 프레임마다 공격 플래그 초기화
 
       if (this.isDead_) {
         if (this.deathTimer_ > 0) {
@@ -417,22 +440,16 @@ export const player = (() => {
         return;
       }
 
-      // Roll 쿨타임 관리
-      if (this.rollCooldownTimer_ > 0) {
-        this.rollCooldownTimer_ -= timeElapsed;
-        if (this.rollCooldownTimer_ < 0) this.rollCooldownTimer_ = 0;
+      // Attack 쿨타임 관리
+      if (this.attackCooldownTimer_ > 0) {
+        this.attackCooldownTimer_ -= timeElapsed;
+        if (this.attackCooldownTimer_ < 0) this.attackCooldownTimer_ = 0;
       }
 
-      // SwordSlash 쿨타임 관리
-      if (this.swordSlashCooldownTimer_ > 0) {
-        this.swordSlashCooldownTimer_ -= timeElapsed;
-        if (this.swordSlashCooldownTimer_ < 0) this.swordSlashCooldownTimer_ = 0;
-      }
-
-      // SwordSlash 이동 로직 (다른 이동과 병행 가능)
+      // Attack 이동 로직 (다른 이동과 병행 가능)
       if (this.isAttacking_) {
-        this.swordSlashTimer_ -= timeElapsed;
-        const slashMove = this.swordSlashDirection_.clone().multiplyScalar(this.swordSlashSpeed_ * timeElapsed);
+        this.attackTimer_ -= timeElapsed;
+        const slashMove = this.attackDirection_.clone().multiplyScalar(this.attackSpeed_ * timeElapsed);
         this.position_.add(slashMove);
 
         // 무기 회전 로직
@@ -440,6 +457,53 @@ export const player = (() => {
             const weapon = this.equippedWeapon_.model_;
             const currentAnimationTime = this.currentAction_.time;
             const currentFrame = currentAnimationTime * 24; // 24 FPS 가정
+
+            // 공격 판정 구간 설정 (예: 11프레임부터 25프레임까지)
+            const attackStartFrame = 11;
+            const attackEndFrame = 25;
+
+            if (currentFrame >= attackStartFrame && currentFrame < attackEndFrame) {
+                this.canDamage_ = true;
+            } else {
+                this.canDamage_ = false;
+            }
+
+            // 실제 공격 판정 및 피해 적용
+            if (this.canDamage_ && !this.attackedThisFrame_) {
+                // 플레이어의 위치와 방향을 기반으로 공격 범위 정의
+                const playerPosition = this.mesh_.position;
+                const playerDirection = new THREE.Vector3();
+                this.mesh_.getWorldDirection(playerDirection);
+                playerDirection.y = 0; // Y축은 고려하지 않음
+                playerDirection.normalize();
+
+                // NPC 목록 순회 (this.params_.npcs가 존재한다고 가정)
+                if (this.params_.npcs) {
+                    this.params_.npcs.forEach(npc => {
+                        if (npc.model_ && !npc.isDead_) { // NPC가 존재하고 죽지 않았다면
+                            const npcPosition = npc.model_.position;
+                            const distance = playerPosition.distanceTo(npcPosition);
+
+                            // 공격 반경 내에 있는지 확인
+                            if (distance <= this.currentAttackRadius) {
+                                const directionToNpc = npcPosition.clone().sub(playerPosition).normalize();
+                                const angle = playerDirection.angleTo(directionToNpc);
+
+                                // 공격 각도 내에 있는지 확인
+                                if (angle <= this.currentAttackAngle / 2) { // 각도는 중심에서 양쪽으로 퍼지므로 절반
+                                    // 이미 피해를 입은 적이 아니라면
+                                    if (!this.hitEnemies_.has(npc)) {
+                                        // NPC에게 피해 적용
+                                        npc.TakeDamage(this.currentAttackDamage);
+                                        this.hitEnemies_.add(npc); // 피해를 입힌 적 추가
+                                        this.attackedThisFrame_ = true; // 한 프레임에 한 번만 공격하도록 설정
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            }
 
             let targetRotationX = Math.PI / 2; // 기본 수평
             
@@ -459,9 +523,16 @@ export const player = (() => {
             weapon.rotation.set(targetRotationX, Math.PI / 2, 0);
         }
 
-        if (this.swordSlashTimer_ <= 0) {
+        if (this.attackTimer_ <= 0) {
             this.isAttacking_ = false;
+            this.canDamage_ = false; // 공격 종료 시 canDamage_ 초기화
         }
+      }
+
+      // Roll 쿨타임 관리
+      if (this.rollCooldownTimer_ > 0) {
+        this.rollCooldownTimer_ -= timeElapsed;
+        if (this.rollCooldownTimer_ < 0) this.rollCooldownTimer_ = 0;
       }
 
       // 구르기 이동 로직 (다른 이동과 배타적)
@@ -489,7 +560,9 @@ export const player = (() => {
 
         const isMoving = this.keys_.forward || this.keys_.backward || this.keys_.left || this.keys_.right;
         const isRunning = isMoving && this.keys_.shift;
-        currentSpeed = isRunning ? this.speed_ * 2 : this.speed_;
+        // Adjust base speed by agility
+        const baseSpeed = 5 * (1 + (this.agility_ * 0.1));
+        currentSpeed = isRunning ? baseSpeed * 2 : baseSpeed;
         
         velocity.normalize().multiplyScalar(currentSpeed * timeElapsed);
         this.position_.add(velocity);

@@ -32,7 +32,8 @@ const WEAPON_DATA = {
     'Hammer_Double_Golden.fbx': { type: ATTACK_TYPE_MELEE, radius: 2.7, angle: Math.PI / 2.1, damage: 25, attackSpeedMultiplier: 1.0, attackType: 'single', specialEffect: null },
     'Sword_big_Golden.fbx': { type: ATTACK_TYPE_MELEE, radius: 2.8, angle: Math.PI / 3.2, damage: 25, attackSpeedMultiplier: 1.0, attackType: 'single', specialEffect: null },
     'Sword_big.fbx': { type: ATTACK_TYPE_MELEE, radius: 2.6, angle: Math.PI / 3.1, damage: 20, attackSpeedMultiplier: 0.9, attackType: 'single', specialEffect: null },
-    'Sword_Golden.fbx': { type: ATTACK_TYPE_MELEE, radius: 2.1, angle: Math.PI / 2.9, damage: 25, attackSpeedMultiplier: 1.0, attackType: 'single', specialEffect: null }
+    'Sword_Golden.fbx': { type: ATTACK_TYPE_MELEE, radius: 2.1, angle: Math.PI / 2.9, damage: 25, attackSpeedMultiplier: 1.0, attackType: 'single', specialEffect: null },
+    'Potion1_Filled.fbx': { type: 'buff', radius: 0.5, angle: 0, damage: 0, attackSpeedMultiplier: 0, attackType: 'none', specialEffect: null, statEffect: { stat: 'strength', amount: 1 } }
 };
 
 
@@ -47,6 +48,8 @@ class GameStage3 {
         // 이미 생성된 hpUI를 사용
         this.playerHpUI = playerHpUI;
         this.npcHpUI = npcHpUI;
+        this.healthLogTimer_ = 0; // 헬스 로그 타이머 초기화
+        this.npcs_ = []; // NPC들을 저장할 배열
         this.Initialize();
         this.RAF();
     }
@@ -180,13 +183,16 @@ class GameStage3 {
         this.player_ = new player.Player({
             scene: this.scene,
             hpUI: this.playerHpUI,
-            weapons: this.weapons_
+            weapons: this.weapons_,
+            npcs: this.npcs_ // NPC 목록을 플레이어에게 전달
         });
         this.playerHpUI.setTarget(this.player_);
 
         // NPC 생성
         const npcPos = new THREE.Vector3(0, 0, -4);
-        this.npc_ = new object.NPC(this.scene, npcPos);
+        const newNpc = new object.NPC(this.scene, npcPos);
+        this.npcs_.push(newNpc); // NPC 배열에 추가
+        this.npc_ = newNpc; // 기존 this.npc_ 참조 유지 (단일 NPC의 경우)
         this.npcHpUI.setTarget(this.npc_);
 
         // 카메라 오프셋 및 회전
@@ -246,13 +252,19 @@ class GameStage3 {
             'Sword.fbx', 'Axe_Double.fbx', 'Bow_Wooden.fbx', 'Dagger.fbx', 'Hammer_Double.fbx',
             'AssaultRifle_1.fbx', 'Pistol_1.fbx', 'Shotgun_1.fbx', 'SniperRifle_1.fbx', 'SubmachineGun_1.fbx',
             'Axe_Double_Golden.fbx', 'Axe_small_Golden.fbx', 'Bow_Golden.fbx', 'Dagger_Golden.fbx',
-            'Hammer_Double_Golden.fbx', 'Sword_big_Golden.fbx', 'Sword_big.fbx', 'Sword_Golden.fbx'
+            'Hammer_Double_Golden.fbx', 'Sword_big_Golden.fbx', 'Sword_big.fbx', 'Sword_Golden.fbx',
+            'Potion1_Filled.fbx' // Added Potion
         ];
         for (let i = 0; i < weaponNames.length; i++) {
             const weaponName = weaponNames[i];
-            const pos = new THREE.Vector3(math.rand_int(-20, 20), 1, math.rand_int(-20, 20));
+            let pos;
+            if (weaponName === 'Potion.fbx') {
+                pos = new THREE.Vector3(0, 1, 4); // Specific position for Potion
+            } else {
+                pos = new THREE.Vector3(math.rand_int(-20, 20), 1, math.rand_int(-20, 20));
+            }
             const weaponData = WEAPON_DATA[weaponName];
-            const weapon = new Item(this.scene, weaponName, pos, weaponData.type, weaponData.radius, weaponData.angle, weaponData.damage, weaponData.attackSpeedMultiplier, weaponData.attackType, weaponData.specialEffect);
+            const weapon = new Item(this.scene, weaponName, pos, weaponData.type, weaponData.radius, weaponData.angle, weaponData.damage, weaponData.attackSpeedMultiplier, weaponData.attackType, weaponData.specialEffect, weaponData.statEffect);
             this.weapons_.push(weapon);
         }
     }
@@ -301,61 +313,52 @@ class GameStage3 {
 
         this.UpdateCoordinateDisplays();
 
+        // 5초마다 NPC 체력 로그
+        this.healthLogTimer_ += delta;
+        if (this.healthLogTimer_ >= 5.0) {
+            if (this.npc_) {
+                console.log(`NPC Health (5s interval): ${this.npc_.health_}`);
+            }
+            this.healthLogTimer_ = 0;
+        }
+
         this.renderer.render(this.scene, this.camera);
         this.UpdateCombat(delta);
     }
 
     UpdateCombat(delta) {
-        if (!this.player_ || !this.player_.mesh_ || !this.npc_ || !this.npc_.model_) {
+        if (!this.player_ || !this.player_.mesh_ || this.npcs_.length === 0) {
             return;
         }
 
-        const playerPos = new THREE.Vector2(this.player_.mesh_.position.x, this.player_.mesh_.position.z);
-        const npcPos = new THREE.Vector2(this.npc_.model_.position.x, this.npc_.model_.position.z);
-        const distance = playerPos.distanceTo(npcPos);
+        // NPC가 플레이어를 공격하는 로직
+        this.npcs_.forEach(npc => {
+            if (!npc.model_ || npc.isDead_) return; // NPC 모델이 없거나 죽었으면 스킵
 
-        if (distance <= this.player_.currentAttackRadius) {
-            //console.log(`Distance to NPC: ${distance.toFixed(2)}, Player Attack Radius: ${this.player_.currentAttackRadius.toFixed(2)}`);
-            // 플레이어가 공격하고, 피해를 줄 수 있는 상태일 때
-            if (this.player_.isAttacking_ && this.player_.canDamage_) {
-                console.log(`Player is attacking: ${this.player_.isAttacking_}, Can damage: ${this.player_.canDamage_}`);
-                const playerToNpc = this.npc_.model_.position.clone().sub(this.player_.mesh_.position);
-                playerToNpc.y = 0; // XZ 평면에서만 고려
-                playerToNpc.normalize();
+            const playerPos = new THREE.Vector2(this.player_.mesh_.position.x, this.player_.mesh_.position.z);
+            const npcPos = new THREE.Vector2(npc.model_.position.x, npc.model_.position.z);
+            const distance = playerPos.distanceTo(npcPos);
 
-                const playerForward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.player_.mesh_.quaternion);
-                playerForward.y = 0; // XZ 평면에서만 고려
-                playerForward.normalize();
+            if (distance <= npc.attackRadius) { // NPC의 공격 반경 사용
+                if (npc.isAttacking_ && npc.canDamage_) {
+                    const npcToPlayer = this.player_.mesh_.position.clone().sub(npc.model_.position);
+                    npcToPlayer.y = 0;
+                    npcToPlayer.normalize();
 
-                const angle = playerForward.angleTo(playerToNpc);
-                console.log(`Angle to NPC: ${(angle * 180 / Math.PI).toFixed(2)} degrees, Player Attack Angle: ${(this.player_.currentAttackAngle * 180 / Math.PI).toFixed(2)} degrees`);
+                    const npcForward = new THREE.Vector3(0, 0, 1).applyQuaternion(npc.model_.quaternion);
+                    npcForward.y = 0;
+                    npcForward.normalize();
 
-                if (angle <= this.player_.currentAttackAngle / 2) {
-                    this.npc_.TakeDamage(this.player_.currentAttackDamage); // NPC에게 플레이어의 현재 공격력만큼 피해
-                    this.player_.canDamage_ = false; // 한 번의 공격에 한 번만 피해를 주도록 설정
-                    console.log(`Player attacks NPC! NPC HP: ${this.npc_.health_}`);
+                    const angle = npcForward.angleTo(npcToPlayer);
+
+                    if (angle <= npc.attackAngle_ / 2) {
+                        this.player_.TakeDamage(20); // 플레이어에게 20의 피해
+                        npc.canDamage_ = false; // 한 번의 공격에 한 번만 피해를 주도록 설정
+                        console.log(`NPC attacks Player! Player HP: ${this.player_.hp_}`);
+                    }
                 }
             }
-
-            // NPC가 공격하고, 피해를 줄 수 있는 상태일 때
-            if (this.npc_.isAttacking_ && this.npc_.canDamage_) {
-                const npcToPlayer = this.player_.mesh_.position.clone().sub(this.npc_.model_.position);
-                npcToPlayer.y = 0; // XZ 평면에서만 고려
-                npcToPlayer.normalize();
-
-                const npcForward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.npc_.model_.quaternion);
-                npcForward.y = 0; // XZ 평면에서만 고려
-                npcForward.normalize();
-
-                const angle = npcForward.angleTo(npcToPlayer);
-
-                if (angle <= this.npc_.attackAngle_ / 2) {
-                    this.player_.TakeDamage(20); // 플레이어에게 20의 피해
-                    this.npc_.canDamage_ = false; // 한 번의 공격에 한 번만 피해를 주도록 설정
-                    console.log(`NPC attacks Player! Player HP: ${this.player_.hp_}`);
-                }
-            }
-        }
+        });
     }
 
     UpdateCoordinateDisplays() {

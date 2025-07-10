@@ -2,3 +2,5 @@ game/
 temp_game_repo/
 BlenderMCP/
 collider.js
+position.txt
+order.txt

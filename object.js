@@ -22,10 +22,12 @@ export const object = (() => {
     }
 
     TakeDamage(damage) {
+      const oldHealth = this.health_;
       this.health_ -= damage;
       if (this.health_ < 0) {
         this.health_ = 0;
       }
+      console.log(`NPC took ${damage} damage. Health changed from ${oldHealth} to ${this.health_}.`);
       // TODO: Add death logic if health is 0
     }
 
