@@ -42,12 +42,16 @@ const gameUI = new ui.GameUI();
 const playerHpUI = new hp.HPUI();
 playerHpUI.setGameUI(gameUI); // 반드시 연결!
 const npcHpUI = new hp.HPUI(true);
+const npcUI = new ui.NPCUI();
+const playerStatUI = new ui.PlayerStatUI();
 
 class GameStage3 {
     constructor() {
         // 이미 생성된 hpUI를 사용
         this.playerHpUI = playerHpUI;
         this.npcHpUI = npcHpUI;
+        this.npcUI = npcUI;
+        this.playerStatUI = playerStatUI;
         this.healthLogTimer_ = 0; // 헬스 로그 타이머 초기화
         this.npcs_ = []; // NPC들을 저장할 배열
         this.Initialize();
@@ -187,10 +191,11 @@ class GameStage3 {
             npcs: this.npcs_ // NPC 목록을 플레이어에게 전달
         });
         this.playerHpUI.setTarget(this.player_);
+        this.playerStatUI.show('Player');
 
         // NPC 생성
         const npcPos = new THREE.Vector3(0, 0, -4);
-        const newNpc = new object.NPC(this.scene, npcPos);
+        const newNpc = new object.NPC(this.scene, npcPos, 'Viking Warrior');
         this.npcs_.push(newNpc); // NPC 배열에 추가
         this.npc_ = newNpc; // 기존 this.npc_ 참조 유지 (단일 NPC의 경우)
         this.npcHpUI.setTarget(this.npc_);
@@ -205,6 +210,7 @@ class GameStage3 {
         // 캐릭터 모델 로딩 후 얼굴 이미지 추출해서 HP UI에 반영
         const checkAndRenderFace = () => {
             if (this.player_ && this.player_.mesh_) {
+                console.log('Calling renderCharacterFaceToProfile for player with mesh:', this.player_.mesh_);
                 this.playerHpUI.renderCharacterFaceToProfile(this.player_.mesh_, this.scene, this.renderer);
             } else {
                 setTimeout(checkAndRenderFace, 100);
@@ -214,6 +220,7 @@ class GameStage3 {
 
         const checkAndRenderNPCFace = () => {
             if (this.npc_ && this.npc_.model_) {
+                console.log('Calling renderCharacterFaceToProfile for NPC with model:', this.npc_.model_);
                 this.npcHpUI.renderCharacterFaceToProfile(this.npc_.model_, this.scene, this.renderer);
             } else {
                 setTimeout(checkAndRenderNPCFace, 100);
@@ -241,9 +248,7 @@ class GameStage3 {
         Object.assign(this.playerCoordDisplay.style, style);
         document.body.appendChild(this.playerCoordDisplay);
 
-        this.npcCoordDisplay = document.createElement('div');
-        Object.assign(this.npcCoordDisplay.style, style);
-        document.body.appendChild(this.npcCoordDisplay);
+        
     }
 
     CreateWeapons() {
@@ -305,10 +310,48 @@ class GameStage3 {
             this.player_.Update(delta, this.rotationAngle);
             this.UpdateCamera();
             this.playerHpUI.updateHP(this.player_.hp_);
+            if (this.player_.mesh_) {
+                const stats = {
+                    position: this.player_.mesh_.position,
+                    health: `${this.player_.hp_} / ${this.player_.maxHp_}`,
+                    attack: this.player_.currentAttackDamage,
+                    speed: this.player_.speed_,
+                    strength: this.player_.strength_,
+                    agility: this.player_.agility_,
+                    stamina: this.player_.stamina_
+                };
+                this.playerStatUI.updateStats(stats);
+            }
         }
-        if (this.npc_) {
+        if (this.npc_ && this.npc_.model_) {
             this.npc_.Update(delta);
             this.npcHpUI.updateHP(this.npc_.health_);
+
+            // Update NPC UI position and visibility
+            const npcWorldPosition = new THREE.Vector3();
+            if (this.npc_.headBone) {
+                this.npc_.headBone.getWorldPosition(npcWorldPosition);
+            } else {
+                npcWorldPosition.copy(this.npc_.model_.position);
+            }
+            npcWorldPosition.y += 2.0; // Offset above head
+
+            const screenPosition = npcWorldPosition.clone().project(this.camera);
+
+            const width = window.innerWidth, height = window.innerHeight;
+            const x = (screenPosition.x * width / 2) + width / 2;
+            const y = -(screenPosition.y * height / 2) + height / 2;
+
+            // Check if NPC is on screen
+            const isBehind = screenPosition.z > 1;
+            const isOnScreen = x > 0 && x < width && y > 0 && y < height && !isBehind;
+
+            if (isOnScreen) {
+                this.npcUI.show(this.npc_.name, this.npc_.health_);
+                this.npcUI.updatePosition(x + 50, y); // Position to the right of the NPC
+            } else {
+                this.npcUI.hide();
+            }
         }
 
         this.UpdateCoordinateDisplays();
@@ -365,9 +408,7 @@ class GameStage3 {
         if (this.player_ && this.player_.mesh_) {
             this.UpdateCoordDisplay(this.playerCoordDisplay, this.player_.mesh_, this.player_.headBone, 2.0);
         }
-        if (this.npc_ && this.npc_.model_) {
-            this.UpdateCoordDisplay(this.npcCoordDisplay, this.npc_.model_, this.npc_.headBone, 2.0);
-        }
+        
     }
 
     UpdateCoordDisplay(element, model, headBone, heightOffset) {

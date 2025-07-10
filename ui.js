@@ -1,4 +1,4 @@
-    // ui.js
+// ui.js
 export const ui = (() => {
   class GameUI {
     constructor() {
@@ -68,5 +68,109 @@ export const ui = (() => {
     }
   }
 
-  return { GameUI };
+  class NPCUI {
+    constructor() {
+      this.npcContainer = document.createElement('div');
+      this.npcContainer.style.position = 'absolute';
+      this.npcContainer.style.top = '50%';
+      this.npcContainer.style.left = 'calc(50% + 100px)'; // Adjust as needed
+      this.npcContainer.style.transform = 'translate(-50%, -50%)';
+      this.npcContainer.style.zIndex = '200';
+      this.npcContainer.style.background = 'rgba(0,0,0,0.7)';
+      this.npcContainer.style.borderRadius = '5px';
+      this.npcContainer.style.padding = '5px 10px';
+      this.npcContainer.style.color = '#fff';
+      this.npcContainer.style.fontSize = '14px';
+      this.npcContainer.style.display = 'none'; // Hidden by default
+
+      this.npcName = document.createElement('div');
+      this.npcName.style.fontWeight = 'bold';
+      this.npcContainer.appendChild(this.npcName);
+
+      this.npcHealth = document.createElement('div');
+      this.npcContainer.appendChild(this.npcHealth);
+
+      document.body.appendChild(this.npcContainer);
+    }
+
+    show(name, health) {
+      this.npcName.innerText = name;
+      this.npcHealth.innerText = `Health: ${health}`;
+      this.npcContainer.style.display = 'block';
+    }
+
+    hide() {
+      this.npcContainer.style.display = 'none';
+    }
+
+    updatePosition(x, y) {
+      this.npcContainer.style.left = `${x}px`;
+      this.npcContainer.style.top = `${y}px`;
+    }
+  }
+
+  class PlayerStatUI {
+    constructor() {
+      this.statContainer = document.createElement('div');
+      this.statContainer.style.position = 'absolute';
+      this.statContainer.style.top = '50%';
+      this.statContainer.style.right = '30px';
+      this.statContainer.style.transform = 'translateY(-50%)';
+      this.statContainer.style.zIndex = '200';
+      this.statContainer.style.background = 'rgba(0,0,0,0.7)';
+      this.statContainer.style.borderRadius = '5px';
+      this.statContainer.style.padding = '10px';
+      this.statContainer.style.color = '#fff';
+      this.statContainer.style.fontSize = '14px';
+      this.statContainer.style.display = 'none'; // Hidden by default
+
+      this.playerName = document.createElement('div');
+      this.playerName.style.fontWeight = 'bold';
+      this.statContainer.appendChild(this.playerName);
+
+      this.playerPosition = document.createElement('div');
+      this.statContainer.appendChild(this.playerPosition);
+
+      this.playerHealth = document.createElement('div');
+      this.statContainer.appendChild(this.playerHealth);
+
+      this.playerAttack = document.createElement('div');
+      this.statContainer.appendChild(this.playerAttack);
+
+      this.playerSpeed = document.createElement('div');
+      this.statContainer.appendChild(this.playerSpeed);
+
+      this.playerStrength = document.createElement('div');
+      this.statContainer.appendChild(this.playerStrength);
+
+      this.playerAgility = document.createElement('div');
+      this.statContainer.appendChild(this.playerAgility);
+
+      this.playerStamina = document.createElement('div');
+      this.statContainer.appendChild(this.playerStamina);
+
+      document.body.appendChild(this.statContainer);
+    }
+
+    show(name) {
+      this.playerName.innerText = name;
+      this.statContainer.style.display = 'block';
+    }
+
+    hide() {
+      this.statContainer.style.display = 'none';
+    }
+
+    updateStats(stats) {
+      this.playerPosition.innerText = `Position: (${stats.position.x.toFixed(2)}, ${stats.position.y.toFixed(2)}, ${stats.position.z.toFixed(2)})`;
+      this.playerHealth.innerText = `Health: ${stats.health}`;
+      this.playerAttack.innerText = `Attack: ${stats.attack}`;
+      this.playerSpeed.innerText = `Speed: ${stats.speed.toFixed(2)}`;
+      this.playerStrength.innerText = `Strength: ${stats.strength}`;
+      this.playerAgility.innerText = `Agility: ${stats.agility}`;
+      this.playerStamina.innerText = `Stamina: ${stats.stamina}`;
+    }
+  }
+
+  return { GameUI, NPCUI, PlayerStatUI };
 })();

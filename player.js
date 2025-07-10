@@ -46,7 +46,6 @@ export const player = (() => {
       this.fallDamageTimer_ = 0;
       this.attackCooldown_ = 0.5; // 쿨타임 설정 (예: 0.5초)
       this.attackCooldownTimer_ = 0; // 현재 쿨타임 타이머
-      this.attackDuration_ = 0.5; // Attack 지속 시간
       this.attackTimer_ = 0; // Attack 타이머
       this.attackSpeed_ = 18; // Attack 이동 속도
       this.attackDirection_ = new THREE.Vector3(0, 0, 0); // Attack 방향
@@ -69,6 +68,15 @@ export const player = (() => {
 
       this.LoadModel_();
       this.InitInput_();
+      this.UpdateDerivedStats(); // Initial stat calculation
+    }
+
+    UpdateDerivedStats() {
+        this.maxHp_ = 100 * (1 + (this.stamina_ * 0.1));
+        const baseDamage = this.equippedWeapon_ ? this.equippedWeapon_.damage : 10; // 10 is bare-hand damage
+        this.currentAttackDamage = baseDamage + this.strength_ * 5; // Strength increases damage
+        this.speed_ = 5 * (1 + (this.agility_ * 0.1));
+        this.attackCooldown_ = (this.equippedWeapon_ ? (0.5 / this.equippedWeapon_.attackSpeedMultiplier) : 0.5) * (1 - (this.agility_ * 0.1));
     }
 
     InitInput_() {
@@ -130,6 +138,7 @@ export const player = (() => {
         default:
           console.warn(`Unknown stat: ${statName}`);
       }
+      this.UpdateDerivedStats();
     }
 
     OnKeyDown_(event) {
@@ -309,6 +318,7 @@ export const player = (() => {
         if (item.model_ && item.model_.parent) {
           item.model_.parent.remove(item.model_);
         }
+        this.UpdateDerivedStats();
         return; // Item consumed, no need to proceed with equipping logic
       }
 
@@ -323,6 +333,7 @@ export const player = (() => {
         this.currentAttackAngle = Math.PI / 2;
         this.currentAttackDamage = 10;
         this.attackCooldown_ = 0.5 * (1 - (this.agility_ * 0.1)); // Default bare hand cooldown, adjusted by agility
+        this.UpdateDerivedStats();
       }
 
       const handBone = this.mesh_.getObjectByName('FistR') || this.mesh_.getObjectByName('HandR');
@@ -342,6 +353,7 @@ export const player = (() => {
         this.currentAttackAngle = this.equippedWeapon_.attackAngle;
         this.currentAttackDamage = this.equippedWeapon_.damage;
         this.attackCooldown_ = (0.5 / this.equippedWeapon_.attackSpeedMultiplier) * (1 - (this.agility_ * 0.1));
+        this.UpdateDerivedStats();
       }
     }
 
@@ -403,9 +415,8 @@ export const player = (() => {
       } else if (name === 'SwordSlash') {
         this.currentAction_.setLoop(THREE.LoopOnce);
         this.currentAction_.clampWhenFinished = true;
-        this.currentAction_.time = 0.17; // 10번째 프레임부터 시작 (24 FPS 가정)
+        this.currentAction_.time = 0.15; // 10번째 프레임부터 시작 (24 FPS 가정)
         this.currentAction_.timeScale = 1.2; // 구르기와 유사하게 속도 조절
-        this.currentAction_.setDuration(this.attackDuration_); // attackDuration_에 맞춰 애니메이션 길이 설정
       } else {
         this.currentAction_.timeScale = 1.0;
       }
@@ -458,11 +469,11 @@ export const player = (() => {
             const currentAnimationTime = this.currentAction_.time;
             const currentFrame = currentAnimationTime * 24; // 24 FPS 가정
 
-            // 공격 판정 구간 설정 (예: 11프레임부터 25프레임까지)
-            const attackStartFrame = 11;
-            const attackEndFrame = 25;
+            // 공격 판정 구간 설정 (예: 11프레임부터 12프레임까지)
+            const StartFrame = 11;
+            const EndFrame = 12;
 
-            if (currentFrame >= attackStartFrame && currentFrame < attackEndFrame) {
+            if (currentFrame >= StartFrame && currentFrame < EndFrame) {
                 this.canDamage_ = true;
             } else {
                 this.canDamage_ = false;

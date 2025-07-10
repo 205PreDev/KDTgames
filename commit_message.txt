@@ -1,43 +1,44 @@
-2025-07-10
+feat 고급 UI 및 안정적인 스탯 시스템 구현
 
-feat: 무기별 공격 속성 구현
+이번 커밋은 UI 및 스탯 시스템을 대대적으로 개편하여 게임 플레이 피드백을 개선하고 치명적인 버그를 수정했습니다
 
-이 커밋은 전투 시스템을 개선하기 위해 무기별 공격 속성을 도입합니다.
+UI 개선 사항
 
-변경 사항은 다음과 같습니다:
+NPCUI 추가 NPC의 이름과 체력을 화면에 표시하여 전투 상황 인지도를 높였습니다
+PlayerStatUI 구현 플레이어의 상세 스탯좌표 체력 공격력 속도 힘 민첩 스태미나을 화면 우측에 표시합니다
+좌표 표시 리팩토링 기존 좌표 표시 로직을 새로운 UI 시스템에 통합하고 중복 코드를 제거했습니다
 
- item.js:
-     Item 클래스 생성자를 확장하여 damage, attackSpeedMultiplier, attackType, specialEffect 속성을 포함하도록 했습니다.
-     이 속성들은 이제 각 Item 무기의 인스턴스 변수로 저장됩니다.
+스탯 및 버프 시스템 개편
 
- main.js:
-     WEAPON_DATA 객체를 업데이트하여 모든 무기근접, 원거리, 황금 버전에 대한 damage, attackSpeedMultiplier, attackType, specialEffect를 정의했습니다.
-         근접 무기검, 양날 도끼, 단검, 양손 망치는 이제 특성에 따라 이러한 속성에 대한 고유한 값을 가집니다.
-         원거리 및 황금 무기에는 이러한 새 속성에 대한 플레이스홀더 값이 있습니다.
-     CreateWeapons에서 Item 인스턴스화를 수정하여 이 새 속성들을 Item 생성자에 전달하도록 했습니다.
-     UpdateCombat에서 NPC 피해 적용을 고정된 값 대신 player.currentAttackDamage를 사용하도록 업데이트했습니다.
+UpdateDerivedStats 함수 playerjs에 새로운 함수를 추가하여 기본 스탯힘 민첩이 파생 스탯공격력 속도 등에 올바르게 영향을 주도록 수정했습니다
+버그 수정 버프 버프 아이템을 섭취해도 플레이어의 공격력이 업데이트되지 않던 치명적인 버그를 수정했습니다 이제 스탯이 변경되거나 무기를 장착할 때마다 UpdateDerivedStats 함수가 호출되어 즉시 업데이트됩니다
 
- player.js:
-     Player 클래스 생성자에 this.currentAttackDamage 속성을 추가하고 0으로 초기화했습니다.
-     OnKeyDown의 KeyJ 공격 로직을 수정하여 장착된 무기의 속성또는 맨손 기본값에 따라 this.currentAttackRadius, this.currentAttackAngle, this.currentAttackDamage, this.swordSlashCooldown를 동적으로 설정하도록 했습니다.
+리팩토링 및 버그 수정
 
-feat: Implement weapon-specific attack properties
+코드 정리 playerjs에서 사용하지 않는 attackDuration 속성을 제거했습니다
+TypeError 수정 mainjs에서 NPC 모델이 완전히 로드되기 전에 접근하여 발생하던 TypeError를 null 체크를 추가하여 해결했습니다
+헤드샷 렌더링 개선 hpjs에서 프로필 이미지 렌더링 시 카메라 위치를 미세 조정하여 더 나은 클로즈업 샷을 캡처하고 코드 가독성을 위해 주석을 추가했습니다
+NPC 이름 지정 objectjs의 NPC 생성자에 name 파라미터를 추가하여 더 다양한 NPC를 생성할 수 있도록 했습니다
 
-This commit introduces weapon-specific attack properties to enhance the combat system.
 
-Changes include:
+feat Implement advanced UI and robust stat system
 
- item.js:
-     Extended the Item class constructor to include damage, attackSpeedMultiplier, attackType, and specialEffect properties.
-     These properties are now stored as instance variables for each Item weapon.
+This commit introduces a major overhaul of the UI and stat systems enhancing gameplay feedback and fixing critical bugs
 
- main.js:
-     Updated the WEAPON_DATA object to define damage, attackSpeedMultiplier, attackType, and specialEffect for all weapons melee, ranged, and golden versions.
-         Melee weapons Sword, Axe_Double, Dagger, Hammer_Double now have distinct values for these properties based on their characteristics.
-         Ranged and golden weapons have placeholder values for these new properties.
-     Modified the Item instantiation in CreateWeapons to pass these new properties to the Item constructor.
-     Updated the NPC damage application in UpdateCombat to use player.currentAttackDamage instead of a fixed value.
+UI Enhancements
 
- player.js:
-     Added this.currentAttackDamage property to the Player class constructor, initialized to 0.
-     Modified the KeyJ attack logic in OnKeyDown to dynamically set this.currentAttackRadius, this.currentAttackAngle, this.currentAttackDamage, and this.swordSlashCooldown based on the equippedWeapon's properties. Bare-hand defaults are used if no weapon is equipped.
+NPCUI Added Displays NPC name and health onscreen improving combat awareness
+PlayerStatUI Implemented Shows detailed player stats coordinates health attack speed strength agility stamina on the right side of the screen
+Refactored Coordinate Display Integrated the old coordinate display logic into the new UI system removing redundant code
+
+Stat and Buff System Overhaul
+
+UpdateDerivedStats Function Created a new function in playerjs to properly calculate derived stats like attack damage and speed from base stats strength agility
+Bug Fix Buffs Fixed a critical bug where consuming a buff item did not update the players attack damage The new UpdateDerivedStats function is now called whenever stats change or weapons are equipped ensuring immediate updates
+
+Refactoring and Bug Fixes
+
+Code Cleanup Removed the unused attackDuration property from playerjs
+TypeError Fix Resolved a TypeError in mainjs that occurred when accessing the NPC model before it was fully loaded by adding a null check
+Improved Headshot Rendering Finetuned the camera position for profile image rendering in hpjs to capture better closeup shots and added comments for clarity
+NPC Naming Added a name parameter to the NPC constructor in objectjs to allow for more varied NPC creation

@@ -5,13 +5,14 @@ import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.124/examples/js
 export const object = (() => {
 
   class NPC {
-    constructor(scene, position = new THREE.Vector3(0, 0, 0)) {
+    constructor(scene, position = new THREE.Vector3(0, 0, 0), name = 'NPC') {
       this.scene_ = scene;
       this.model_ = null;
       this.mixer_ = null;
       this.animations_ = {};
       this.currentAction_ = null;
       this.health_ = 150; // NPC 체력
+      this.name_ = name;
       this.isAttacking_ = false;
       this.canDamage_ = false;
       this.attackCooldown_ = 2.0; // 공격 쿨타임

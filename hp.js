@@ -301,52 +301,88 @@ export const hp = (() => {
 
     // === 프로필 얼굴 이미지 추출 기능 ===
     renderCharacterFaceToProfile(mesh, scene, renderer) {
+      // 렌더링할 이미지의 크기를 128x128 픽셀로 설정합니다.
       const size = 128;
+      // WebGL 렌더 타겟을 생성합니다. 이 곳에 3D 씬의 렌더링 결과가 저장됩니다.
       const renderTarget = new THREE.WebGLRenderTarget(size, size);
 
+      // 모델의 'Head' 본(bone)을 찾기 위한 변수를 초기화합니다.
       let head = null;
+      // 모델의 모든 자식 객체를 순회하며 'Head'라는 이름의 객체를 찾습니다.
       mesh.traverse((child) => {
+        // 자식 객체의 이름이 'Head'이면 head 변수에 할당합니다.
         if (child.name === "Head") head = child;
       });
 
+      // 얼굴의 월드 좌표와 카메라의 월드 좌표를 저장할 변수를 선언합니다.
       let faceWorldPos, cameraWorldPos;
+      // 'Head' 본을 찾았다면 (즉, 캐릭터가 머리 본을 가지고 있다면) 이 블록을 실행합니다.
       if (head) {
+        // head 본의 월드 행렬을 업데이트하여 정확한 월드 좌표를 얻을 수 있도록 합니다.
         head.updateMatrixWorld(true);
+        // 얼굴의 월드 좌표를 저장할 Vector3 객체를 생성합니다.
         faceWorldPos = new THREE.Vector3();
+        // head 본의 월드 좌표를 faceWorldPos에 복사합니다.
         head.getWorldPosition(faceWorldPos);
 
+        // head 본의 월드 쿼터니언(회전)을 저장할 Quaternion 객체를 생성합니다.
         const headQuaternion = new THREE.Quaternion();
+        // head 본의 월드 쿼터니언을 headQuaternion에 복사합니다.
         head.getWorldQuaternion(headQuaternion);
+        // head 본의 정면 방향 벡터를 계산합니다 (Z축 방향).
         const headForward = new THREE.Vector3(0, 0, 1).applyQuaternion(headQuaternion);
-        cameraWorldPos = faceWorldPos.clone().add(headForward.multiplyScalar(0.35));
+        // 카메라의 월드 좌표를 계산합니다. 얼굴 위치에서 head 본의 정면 방향으로 0.35만큼 떨어진 지점입니다.
+        cameraWorldPos = faceWorldPos.clone().add(headForward.multiplyScalar(0.001));
+      // 'Head' 본을 찾지 못했다면 (즉, 캐릭터가 머리 본을 가지고 있지 않다면) 이 블록을 실행합니다.
       } else {
+        // 메시의 월드 행렬을 업데이트합니다.
         mesh.updateMatrixWorld(true);
+        // 얼굴의 월드 좌표를 메시의 로컬 좌표 (0, 1.7, 0)를 월드 좌표로 변환하여 설정합니다.
         faceWorldPos = mesh.localToWorld(new THREE.Vector3(0, 1.7, 0));
+        // 카메라의 월드 좌표를 메시의 로컬 좌표 (0, 1.7, 0.7)를 월드 좌표로 변환하여 설정합니다.
         cameraWorldPos = mesh.localToWorld(new THREE.Vector3(0, 1.7, 0.7));
       }
 
+      // 얼굴 렌더링을 위한 원근 카메라를 생성합니다. (시야각 40도, 종횡비 1:1, near/far 클리핑 평면)
       const faceCamera = new THREE.PerspectiveCamera(40, 1, 0.1, 10);
+      // 얼굴 카메라의 위치를 계산된 cameraWorldPos로 설정합니다.
       faceCamera.position.copy(cameraWorldPos);
+      // 얼굴 카메라가 계산된 faceWorldPos를 바라보도록 설정합니다.
       faceCamera.lookAt(faceWorldPos);
 
+      // 렌더러의 렌더 타겟을 이전에 생성한 renderTarget으로 설정합니다. 이제 렌더링 결과는 화면이 아닌 renderTarget에 저장됩니다.
       renderer.setRenderTarget(renderTarget);
+      // 지정된 씬과 얼굴 카메라를 사용하여 렌더링을 수행합니다.
       renderer.render(scene, faceCamera);
+      // 렌더러의 렌더 타겟을 다시 기본값(화면)으로 설정합니다.
       renderer.setRenderTarget(null);
 
+      // 렌더 타겟에서 픽셀 데이터를 읽어올 Uint8Array 버퍼를 생성합니다. (RGBA 각 1바이트씩 4채널)
       const buffer = new Uint8Array(size * size * 4);
+      // 렌더 타겟의 픽셀 데이터를 버퍼로 읽어옵니다.
       renderer.readRenderTargetPixels(renderTarget, 0, 0, size, size, buffer);
 
+      // 2D 캔버스 요소를 생성합니다.
       const canvas = document.createElement('canvas');
+      // 캔버스 너비를 설정합니다.
       canvas.width = size;
+      // 캔버스 높이를 설정합니다.
       canvas.height = size;
+      // 캔버스의 2D 렌더링 컨텍스트를 가져옵니다.
       const ctx = canvas.getContext('2d');
+      // 캔버스에 그릴 ImageData 객체를 생성합니다.
       const imageData = ctx.createImageData(size, size);
+      // 읽어온 픽셀 데이터를 ImageData 객체에 설정합니다.
       imageData.data.set(buffer);
+      // ImageData 객체를 캔버스에 그립니다.
       ctx.putImageData(imageData, 0, 0);
 
+      // 캔버스 내용을 데이터 URL (PNG 형식)로 변환합니다.
       const dataURL = canvas.toDataURL();
+      // HP 프로필 이미지 요소의 src 속성을 데이터 URL로 설정하여 이미지를 표시합니다.
       this.hpProfile.src = dataURL;
 
+      // 사용이 끝난 렌더 타겟 리소스를 해제합니다.
       renderTarget.dispose();
     }
   }
