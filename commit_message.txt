@@ -1,44 +1,19 @@
-feat 고급 UI 및 안정적인 스탯 시스템 구현
+feat: NPC 사망/부활 및 애니메이션 개선
 
-이번 커밋은 UI 및 스탯 시스템을 대대적으로 개편하여 게임 플레이 피드백을 개선하고 치명적인 버그를 수정했습니다
+이 커밋은 캐릭터 애니메이션 및 NPC 동작과 관련된 여러 개선 사항을 포함합니다:
 
-UI 개선 사항
+- 플레이어 애니메이션 목록 출력: 플레이어 모델 로딩 시 사용 가능한 애니메이션 목록을 콘솔에 출력하도록 추가했습니다.
+- 피격 애니메이션 (ReceiveHit): 플레이어와 NPC가 피해를 입을 때 ReceiveHit 애니메이션을 재생하도록 구현했습니다.
+- NPC 공격 애니메이션 개선: 일반적인 Attack 애니메이션이 없으므로, NPC 공격 애니메이션 로직을 명시적으로 SwordSlash 애니메이션을 사용하도록 수정했습니다. 이는 SetAnimation_ 및 startAttack 함수를 업데이트하는 것을 포함합니다.
+- NPC 사망 및 부활 시스템: NPC에 대한 사망 및 부활 메커니즘을 플레이어 시스템과 유사하게 통합했습니다. 이제 NPC는 Death 애니메이션을 재생하고, 보이지 않게 되며, 설정된 타이머 후에 맵 경계 내의 무작위 위치에서 부활합니다.
+- NPC 가시성 디버깅: 모델 스케일 문제로 인해 NPC가 보이지 않던 문제를 해결했습니다. 디버깅 로그는 수정 후 추가 및 제거되었습니다.
 
-NPCUI 추가 NPC의 이름과 체력을 화면에 표시하여 전투 상황 인지도를 높였습니다
-PlayerStatUI 구현 플레이어의 상세 스탯좌표 체력 공격력 속도 힘 민첩 스태미나을 화면 우측에 표시합니다
-좌표 표시 리팩토링 기존 좌표 표시 로직을 새로운 UI 시스템에 통합하고 중복 코드를 제거했습니다
+feat: Implement NPC death/respawn and animation improvements
 
-스탯 및 버프 시스템 개편
+This commit introduces several enhancements related to character animations and NPC behavior:
 
-UpdateDerivedStats 함수 playerjs에 새로운 함수를 추가하여 기본 스탯힘 민첩이 파생 스탯공격력 속도 등에 올바르게 영향을 주도록 수정했습니다
-버그 수정 버프 버프 아이템을 섭취해도 플레이어의 공격력이 업데이트되지 않던 치명적인 버그를 수정했습니다 이제 스탯이 변경되거나 무기를 장착할 때마다 UpdateDerivedStats 함수가 호출되어 즉시 업데이트됩니다
-
-리팩토링 및 버그 수정
-
-코드 정리 playerjs에서 사용하지 않는 attackDuration 속성을 제거했습니다
-TypeError 수정 mainjs에서 NPC 모델이 완전히 로드되기 전에 접근하여 발생하던 TypeError를 null 체크를 추가하여 해결했습니다
-헤드샷 렌더링 개선 hpjs에서 프로필 이미지 렌더링 시 카메라 위치를 미세 조정하여 더 나은 클로즈업 샷을 캡처하고 코드 가독성을 위해 주석을 추가했습니다
-NPC 이름 지정 objectjs의 NPC 생성자에 name 파라미터를 추가하여 더 다양한 NPC를 생성할 수 있도록 했습니다
-
-
-feat Implement advanced UI and robust stat system
-
-This commit introduces a major overhaul of the UI and stat systems enhancing gameplay feedback and fixing critical bugs
-
-UI Enhancements
-
-NPCUI Added Displays NPC name and health onscreen improving combat awareness
-PlayerStatUI Implemented Shows detailed player stats coordinates health attack speed strength agility stamina on the right side of the screen
-Refactored Coordinate Display Integrated the old coordinate display logic into the new UI system removing redundant code
-
-Stat and Buff System Overhaul
-
-UpdateDerivedStats Function Created a new function in playerjs to properly calculate derived stats like attack damage and speed from base stats strength agility
-Bug Fix Buffs Fixed a critical bug where consuming a buff item did not update the players attack damage The new UpdateDerivedStats function is now called whenever stats change or weapons are equipped ensuring immediate updates
-
-Refactoring and Bug Fixes
-
-Code Cleanup Removed the unused attackDuration property from playerjs
-TypeError Fix Resolved a TypeError in mainjs that occurred when accessing the NPC model before it was fully loaded by adding a null check
-Improved Headshot Rendering Finetuned the camera position for profile image rendering in hpjs to capture better closeup shots and added comments for clarity
-NPC Naming Added a name parameter to the NPC constructor in objectjs to allow for more varied NPC creation
+- Player Animation Logging: Added console output to display available animations for the player model upon loading.
+- Damage Animation (ReceiveHit): Implemented ReceiveHit animation playback for both player and NPC when they take damage.
+- NPC Attack Animation Refinement: Corrected attack animation logic to explicitly use the SwordSlash animation, as a generic Attack animation was not available. This includes updating SetAnimation_ and startAttack functions.
+- NPC Death and Respawn System: Integrated a death and respawn mechanism for NPCs, mirroring the player's system. NPCs now play a Death animation, become invisible, and respawn after a set timer at a random location within map bounds.
+- NPC Visibility Debugging: Resolved an issue where the NPC was not visible due to an incorrect model scale. Debugging logs were added and subsequently removed after the fix.
