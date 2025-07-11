@@ -95,6 +95,8 @@ export const player = (() => {
         this.isDead_ = true;
         this.deathTimer_ = 5.0;
         this.SetAnimation_('Death');
+      } else {
+        this.SetAnimation_('ReceiveHit'); // 피해를 입었을 때 ReceiveHit 애니메이션 호출
       }
     }
 
@@ -266,12 +268,22 @@ export const player = (() => {
             } else {
                 this.SetAnimation_('Idle');
             }
+          } else if (e.action.getClip().name === 'ReceiveHit') {
+            // ReceiveHit 애니메이션이 끝나면 Idle 또는 Walk/Run 애니메이션으로 전환
+            const isMoving = this.keys_.forward || this.keys_.backward || this.keys_.left || this.keys_.right;
+            const isRunning = isMoving && this.keys_.shift;
+            if (isMoving) {
+                this.SetAnimation_(isRunning ? 'Run' : 'Walk');
+            } else {
+                this.SetAnimation_('Idle');
+            }
           }
         });
 
         for (const clip of gltf.animations) {
           this.animations_[clip.name] = this.mixer_.clipAction(clip);
         }
+        console.log("Available animations:", Object.keys(this.animations_));
         this.SetAnimation_('Idle');
       }, undefined, (error) => {
         console.error("Error loading model:", error);
