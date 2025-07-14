@@ -24,7 +24,12 @@ export class Item {
     loader.setPath('./resources/weapon/FBX/'); // 무기/도구 FBX는 여기에 있다고 가정
     loader.load(itemName, (fbx) => {
       const model = fbx;
-      model.scale.setScalar(0.01);
+      // 총(weapon/gun)일 경우 스케일 0.5배 적용
+      if (/AssaultRifle|Pistol|Shotgun|SniperRifle|SubmachineGun/i.test(itemName)) {
+        model.scale.setScalar(0.005); // 기존 0.01의 0.5배
+      } else {
+        model.scale.setScalar(0.01);
+      }
       model.position.copy(position);
 
       model.traverse((c) => {

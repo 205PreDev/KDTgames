@@ -1,67 +1,27 @@
-두 저장소의 비교 분석 결과, main.js, hp.js, object.js, player.js 파일에서 기능과 구현 방식에 큰 차이가 있습니다.
-  특히 kcgame은 멀티플레이어 기능을, KDTgames는 더 상세한 싱글 플레이어 RPG 기능을 가지고 있습니다.
+import bpy
 
+# 현재 Armature를 선택한 상태에서 실행하세요
+armature = bpy.context.object
 
-  이러한 차이 때문에 단순히 파일을 덮어쓰거나 git merge를 사용하는 것은 많은 충돌과 코드 꼬임을 유발할 수 있습니다.
-   따라서 기능별로 신중하게 통합하는 전략이 필요합니다.
+# "Mixamo에서 요구하는 이름" : "현재 본 이름" (반대 매핑!)
+rename_map = {
+    "c_hand_ik_left_pb": "Fist_ik.L",
+    "c_hand_ik_right_pb": "Fist_ik.R",
+    "c_foot_ik_left_pb": "Foot_ik.L",
+    "c_foot_ik_right_pb": "Foot_ik.R",
+    # 필요시 더 추가
+}
 
-  제안하는 병합 순서 및 전략:
+bpy.ops.object.mode_set(mode='EDIT')
+edit_bones = armature.data.edit_bones
 
+for mixamo_name, current_name in rename_map.items():
+    bone = edit_bones.get(current_name)
+    if bone:
+        print(f"Renaming '{current_name}' → '{mixamo_name}'")
+        bone.name = mixamo_name
+    else:
+        print(f"Bone '{current_name}' not found!")
 
-   1. 기준 프로젝트 선택: 멀티플레이어 기능이 핵심이라면 kcgame 프로젝트를 기본 베이스로 삼는 것이 좋습니다. 만약
-      KDTgames의 RPG 기능을 멀티플레이어로 확장하는 것이 목표라면 KDTgames를 베이스로 삼고 멀티플레이어 기능을
-      통합해야 합니다. 여기서는 `kcgame`을 베이스로 `KDTgames`의 RPG 기능을 통합하는 방향으로 설명하겠습니다.
-
-
-   2. 파일 이름 충돌 해결:
-       * kcgame/public/object.js (환경 오브젝트)와 KDTgames/object.js (NPC)는 이름은 같지만 역할이 다릅니다.
-           * kcgame/public/object.js를 kcgame/public/object.js와 같이 이름을 변경하여 환경 오브젝트를
-             담당하도록 합니다.
-           * KDTgames/object.js를 kcgame/public/pc.js와 같이 복사하고 이름을 변경하여 NPC 캐릭터를
-             담당하도록 합니다.
-
-   3. 핵심 모듈 통합 (순서대로 진행):
-
-
-       * `environment_objects.js` (구 `kcgame/public/object.js`) 통합:
-           * kcgame 프로젝트의 환경 오브젝트 로딩 및 충돌 처리 로직을 유지합니다.
-           * main.js에서 이 파일의 임포트 경로와 클래스 이름을 변경된 이름에 맞춰 수정합니다.
-
-
-       * `player.js` 통합:
-           * kcgame/public/player.js를 기본으로 사용합니다.
-           * KDTgames/player.js에서 다음 기능들을 kcgame/public/player.js로 선택적으로 통합합니다:
-               * 스탯 시스템 (strength_, agility_, stamina_, UpdateDerivedStats())
-               * 아이템 및 무기 장착 로직 (PickupWeapon_(), EquipItem())
-               * 상세 공격 로직 (공격 반경, 각도, 피해, hitEnemies_ 등)
-               * Item.js 파일이 KDTgames에만 있으므로, KDTgames/item.js를 kcgame/public/item.js로 복사하고
-                 player.js에서 임포트합니다.
-           * kcgame/public/player.js의 멀티플레이어 동기화 및 고급 충돌 처리 로직은 유지합니다.
-
-
-       * `npc_character.js` (구 `KDTgames/object.js`) 통합:
-           * KDTgames/object.js의 NPC 클래스를 kcgame/public/npc_character.js로 가져옵니다.
-           * main.js에서 NPC를 생성할 때 이 새로운 npc_character.js 클래스를 사용하도록 수정합니다.
-           * player.js의 공격 로직이 이 새로운 NPC 클래스와 상호작용하도록 연결합니다.
-
-
-       * `hp.js` 통합:
-           * kcgame/public/hp.js (Three.js Sprite 기반)를 기본으로 사용합니다. 이 방식이 3D 멀티플레이어 환경에 더
-             적합합니다.
-           * KDTgames/hp.js의 프로필 이미지 렌더링 기능이 필요하다면, kcgame/public/hp.js의 CanvasTexture에
-             렌더링하는 방식으로 재구현해야 합니다. 이는 복잡할 수 있으므로 우선순위를 낮게 두거나 나중에 고려할 수
-             있습니다.
-           * 사망 오버레이 및 피격 효과는 kcgame/public/hp.js의 기존 로직을 활용합니다.
-
-
-       * `main.js` 통합:
-           * kcgame/public/main.js를 기본으로 사용합니다.
-           * 위에서 변경된 파일 이름과 클래스 이름에 맞춰 모든 임포트 및 객체 생성 부분을 수정합니다.
-           * KDTgames/main.js의 WEAPON_DATA 및 CreateWeapons() 함수를 kcgame/public/main.js로 통합합니다.
-           * KDTgames/main.js의 UpdateCombat() 로직을 kcgame/public/main.js의 RAF 함수 내에 통합하거나 별도의
-             함수로 호출하여 플레이어와 NPC 간의 전투를 처리하도록 합니다.
-           * KDTgames/main.js의 playerStatUI 및 npcUI 초기화 로직을 kcgame/public/main.js에 통합합니다. (필요하다면
-             KDTgames/ui.js도 가져와야 합니다.)
-
-       * `map.js` 및 `math.js`: 두 저장소에서 동일하므로 특별한 병합 작업 없이 kcgame/public 버전을 그대로
-         사용합니다.
+bpy.ops.object.mode_set(mode='OBJECT')
+print("본 이름 변경 완료!")

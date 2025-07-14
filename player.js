@@ -418,9 +418,9 @@ export const player = (() => {
           case 'Idle':
           case 'Walk':
           case 'Run':
-            // 평상시 자세: 기본 장착 위치
+            // 평상시 자세: 무기를 옆으로 들고 있음
             weapon.position.set(-0.01, 0.09, 0.1);
-            weapon.rotation.set(Math.PI / 2, Math.PI / 2, 0);
+            weapon.rotation.set(Math.PI / 2, Math.PI / 2, 0); // 옆으로 향함
             break;
 
           default:
@@ -577,24 +577,44 @@ export const player = (() => {
                     }
                 }
 
-                // 무기 회전 로직 (근접 공격만)
+                // 무기 회전 로직 (근접 공격과 원거리 공격 모두)
                 if (currentAnimationName === 'SwordSlash') {
                     let targetRotationX = Math.PI / 2; // 기본 수평
+                    let targetRotationY = Math.PI / 2; // 기본 Y축 회전
+                    let targetRotationZ = 0; // 기본 Z축 회전
                     
-                    if (currentFrame >= 11 && currentFrame < 17) {
-                        // 11 ~ 16 프레임: 안쪽으로 꺾임
-                        const startFrame = 11;
-                        const endFrame = 16;
-                        const progress = (currentFrame - startFrame) / (endFrame - startFrame);
-                        targetRotationX = THREE.MathUtils.lerp(Math.PI / 2, Math.PI / 2 + Math.PI / 8, progress);
-                    } else if (currentFrame >= 17) {
-                        // 17 프레임 이후: 오른쪽으로 꺾임
-                        const startFrame = 17;
-                        const endFrame = 25; // 애니메이션 끝 프레임
-                        const progress = (currentFrame - startFrame) / (endFrame - startFrame);
-                        targetRotationX = THREE.MathUtils.lerp(Math.PI / 2 + Math.PI / 8, Math.PI / 2 - Math.PI / 8, progress);
+                    // 공격 구간별 무기 회전 조정
+                    if (currentFrame >= 11 && currentFrame <= 21) {
+                        // 11 ~ 21 프레임: 0에서 90도(π/2)까지 선형 증가
+                        const progress = (currentFrame - 11) / 10;
+                        targetRotationX = progress * (Math.PI / 2);
+                        targetRotationY = Math.PI / 2;
+                        targetRotationZ = 0;
+                    } else if (currentFrame === 22) {
+                        // 22 프레임: 60도(π/3)
+                        targetRotationX = Math.PI / 3;
+                        targetRotationY = Math.PI / 2;
+                        targetRotationZ = 0;
+                    } else if (currentFrame === 23) {
+                        // 23 프레임: 30도(π/6)
+                        targetRotationX = Math.PI / 6;
+                        targetRotationY = Math.PI / 2;
+                        targetRotationZ = 0;
+                    } else if (currentFrame === 24) {
+                        // 24 프레임: 0도
+                        targetRotationX = 0;
+                        targetRotationY = Math.PI / 2;
+                        targetRotationZ = 0;
+                    } else {
+                        // 기본 자세 (11-24프레임이 아닐 때)
+                        targetRotationX = Math.PI / 2;
+                        targetRotationY = Math.PI / 2;
+                        targetRotationZ = 0;
                     }
-                    weapon.rotation.set(targetRotationX, Math.PI / 2, 0);
+                    weapon.rotation.set(targetRotationX, targetRotationY, targetRotationZ);
+                } else if (currentAnimationName === 'Shoot_OneHanded') {
+                    // 원거리 공격 시 무기 회전 없음 - 고정 자세 유지
+                    weapon.rotation.set(Math.PI / 2, Math.PI / 2, 0); // 기본 자세 유지
                 }
             }
         }

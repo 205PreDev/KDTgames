@@ -1,19 +1,6 @@
-feat: NPC 사망/부활 및 애니메이션 개선
-
-이 커밋은 캐릭터 애니메이션 및 NPC 동작과 관련된 여러 개선 사항을 포함합니다:
-
-- 플레이어 애니메이션 목록 출력: 플레이어 모델 로딩 시 사용 가능한 애니메이션 목록을 콘솔에 출력하도록 추가했습니다.
-- 피격 애니메이션 (ReceiveHit): 플레이어와 NPC가 피해를 입을 때 ReceiveHit 애니메이션을 재생하도록 구현했습니다.
-- NPC 공격 애니메이션 개선: 일반적인 Attack 애니메이션이 없으므로, NPC 공격 애니메이션 로직을 명시적으로 SwordSlash 애니메이션을 사용하도록 수정했습니다. 이는 SetAnimation_ 및 startAttack 함수를 업데이트하는 것을 포함합니다.
-- NPC 사망 및 부활 시스템: NPC에 대한 사망 및 부활 메커니즘을 플레이어 시스템과 유사하게 통합했습니다. 이제 NPC는 Death 애니메이션을 재생하고, 보이지 않게 되며, 설정된 타이머 후에 맵 경계 내의 무작위 위치에서 부활합니다.
-- NPC 가시성 디버깅: 모델 스케일 문제로 인해 NPC가 보이지 않던 문제를 해결했습니다. 디버깅 로그는 수정 후 추가 및 제거되었습니다.
-
-feat: Implement NPC death/respawn and animation improvements
-
-This commit introduces several enhancements related to character animations and NPC behavior:
-
-- Player Animation Logging: Added console output to display available animations for the player model upon loading.
-- Damage Animation (ReceiveHit): Implemented ReceiveHit animation playback for both player and NPC when they take damage.
-- NPC Attack Animation Refinement: Corrected attack animation logic to explicitly use the SwordSlash animation, as a generic Attack animation was not available. This includes updating SetAnimation_ and startAttack functions.
-- NPC Death and Respawn System: Integrated a death and respawn mechanism for NPCs, mirroring the player's system. NPCs now play a Death animation, become invisible, and respawn after a set timer at a random location within map bounds.
-- NPC Visibility Debugging: Resolved an issue where the NPC was not visible due to an incorrect model scale. Debugging logs were added and subsequently removed after the fix.
+2025-07-14 18:00
+- NPC 피격 시 항상 ReceiveHit 애니메이션 재생(무적 없음, 연속 피격 가능)
+- NPC TakeDamage 함수 attacker 인자 추가
+- 총기류(AssaultRifle, Pistol, Shotgun, SniperRifle, SubmachineGun) 스폰 시 스케일 0.5배 적용
+- 불필요한 콘솔 출력 및 주석 정리
+- object.js, item.js 등 관련 코드 정리 및 리팩토링
