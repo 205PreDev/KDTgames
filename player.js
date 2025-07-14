@@ -65,6 +65,10 @@ export const player = (() => {
       this.stamina_ = 0;
       // Derived Stats
       this.maxHp_ = 100 * (1 + (this.stamina_ * 0.1)); // Initial base HP, will be modified by stamina
+      // 피격 시스템 추가
+      this.isHit_ = false; // 피격 상태
+      this.hitTimer_ = 0; // 피격 타이머
+      this.hitDuration_ = 0.5; // 피격 지속 시간
 
       this.LoadModel_();
       this.InitInput_();
@@ -85,7 +89,8 @@ export const player = (() => {
     }
 
     TakeDamage(amount) {
-      if (this.isDead_) return;
+      if (this.isDead_ || this.isHit_) return; // 이미 죽었거나 피격 중이면 무시
+      
       this.hp_ -= amount;
       if (this.hp_ <= 0) {
         this.hp_ = 0;
@@ -96,7 +101,11 @@ export const player = (() => {
         this.deathTimer_ = 5.0;
         this.SetAnimation_('Death');
       } else {
+        // 피격 상태 설정
+        this.isHit_ = true;
+        this.hitTimer_ = this.hitDuration_;
         this.SetAnimation_('ReceiveHit'); // 피해를 입었을 때 ReceiveHit 애니메이션 호출
+        console.log(`Player is hit! Playing ReceiveHit animation.`);
       }
     }
 
@@ -157,7 +166,7 @@ export const player = (() => {
         case 'ShiftRight':
           this.keys_.shift = true; break;
         case 'KeyK':
-          if (this.isAttacking_) return; // 공격 중에는 점프 불가
+          if (this.isAttacking_ || this.isHit_) return; // 공격 중이거나 피격 중에는 점프 불가
           if (!this.isJumping_ && !this.isRolling_) {
             this.isJumping_ = true;
             this.velocityY_ = this.jumpPower_;
@@ -166,25 +175,30 @@ export const player = (() => {
           }
           break;
         case 'KeyJ':
-          if (this.isAttacking_) return; // 공격 중에는 Attack 불가
+          if (this.isAttacking_ || this.isHit_) return; // 공격 중이거나 피격 중에는 Attack 불가
+          
+          // 원거리 무기인지 확인
+          const isRangedWeapon = this.equippedWeapon_ && this.equippedWeapon_.type === 'ranged';
+          const attackAnimation = isRangedWeapon ? 'Shoot_OneHanded' : 'SwordSlash';
+          
           if (
             !this.isJumping_ &&
             !this.isRolling_ &&
-            this.animations_['SwordSlash'] && // 애니메이션 이름은 그대로 사용
+            this.animations_[attackAnimation] && // 무기 타입에 따른 애니메이션 확인
             this.attackCooldownTimer_ <= 0
           ) {
             this.isAttacking_ = true;
             this.attackTimer_ = this.attackDuration_;
             const moveDir = new THREE.Vector3();
             this.attackDirection_.copy(moveDir);
-            this.SetAnimation_('SwordSlash'); // 애니메이션 이름은 그대로 사용
+            this.SetAnimation_(attackAnimation); // 무기 타입에 따른 애니메이션 사용
             this.hitEnemies_.clear(); // 새로운 공격 시작 시 hitEnemies 초기화
 
             this.attackCooldownTimer_ = this.attackCooldown_;
           }
           break;
         case 'KeyL':
-          if (this.isAttacking_) return; // 공격 중에는 구르기 불가
+          if (this.isAttacking_ || this.isHit_) return; // 공격 중이거나 피격 중에는 구르기 불가
           if (
             !this.isJumping_ &&
             !this.isRolling_ &&
@@ -233,7 +247,7 @@ export const player = (() => {
     LoadModel_() {
       const loader = new GLTFLoader();
       loader.setPath('./resources/char/glTF/');
-      loader.load('Suit_Male.gltf', (gltf) => {
+      loader.load('Suit_male.gltf', (gltf) => {
         const model = gltf.scene;
         model.scale.setScalar(1);
         model.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
@@ -256,7 +270,7 @@ export const player = (() => {
         this.mixer_ = new THREE.AnimationMixer(model);
 
         this.mixer_.addEventListener('finished', (e) => {
-          if (e.action.getClip().name === 'SwordSlash') {
+          if (e.action.getClip().name === 'SwordSlash' || e.action.getClip().name === 'Shoot_OneHanded') {
             this.isAttacking_ = false;
             this.canDamage_ = false; // 공격 애니메이션 끝나면 초기화
             this.hitEnemies_.clear(); // 공격 종료 시 hitEnemies 초기화
@@ -269,6 +283,9 @@ export const player = (() => {
                 this.SetAnimation_('Idle');
             }
           } else if (e.action.getClip().name === 'ReceiveHit') {
+            // 피격 애니메이션이 끝나면 피격 상태 해제
+            this.isHit_ = false;
+            this.hitTimer_ = 0;
             // ReceiveHit 애니메이션이 끝나면 Idle 또는 Walk/Run 애니메이션으로 전환
             const isMoving = this.keys_.forward || this.keys_.backward || this.keys_.left || this.keys_.right;
             const isRunning = isMoving && this.keys_.shift;
@@ -392,6 +409,12 @@ export const player = (() => {
             weapon.rotation.set(Math.PI / 2, Math.PI / 2, 0); // Default rotation, will be overridden by Update
             break;
 
+          case 'Shoot_OneHanded':
+            // 원거리 공격 시 무기 자세
+            weapon.position.set(-0.01, 0.09, 0.1);
+            weapon.rotation.set(Math.PI / 2, Math.PI / 2, 0);
+            break;
+
           case 'Idle':
           case 'Walk':
           case 'Run':
@@ -429,6 +452,11 @@ export const player = (() => {
         this.currentAction_.clampWhenFinished = true;
         this.currentAction_.time = 0.15; // 10번째 프레임부터 시작 (24 FPS 가정)
         this.currentAction_.timeScale = 1.2; // 구르기와 유사하게 속도 조절
+      } else if (name === 'Shoot_OneHanded') {
+        this.currentAction_.setLoop(THREE.LoopOnce);
+        this.currentAction_.clampWhenFinished = true;
+        this.currentAction_.time = 0.0; // 처음부터 시작
+        this.currentAction_.timeScale = 1.0; // 기본 속도
       } else {
         this.currentAction_.timeScale = 1.0;
       }
@@ -438,6 +466,17 @@ export const player = (() => {
       if (!this.mesh_) return;
       this.lastRotationAngle_ = rotationAngle;
       this.attackedThisFrame_ = false; // 매 프레임마다 공격 플래그 초기화
+
+      // 피격 타이머 업데이트
+      if (this.isHit_ && this.hitTimer_ > 0) {
+        this.hitTimer_ -= timeElapsed;
+        if (this.hitTimer_ <= 0) {
+          this.isHit_ = false;
+          if (!this.isDead_) {
+            this.SetAnimation_('Idle');
+          }
+        }
+      }
 
       if (this.isDead_) {
         if (this.deathTimer_ > 0) {
@@ -475,75 +514,89 @@ export const player = (() => {
         const slashMove = this.attackDirection_.clone().multiplyScalar(this.attackSpeed_ * timeElapsed);
         this.position_.add(slashMove);
 
-        // 무기 회전 로직
-        if (this.equippedWeapon_ && this.equippedWeapon_.model_ && this.currentAction_ && this.currentAction_._clip.name === 'SwordSlash') {
-            const weapon = this.equippedWeapon_.model_;
-            const currentAnimationTime = this.currentAction_.time;
-            const currentFrame = currentAnimationTime * 24; // 24 FPS 가정
+        // 무기 회전 로직 - 근접 공격과 원거리 공격 모두 처리
+        if (this.equippedWeapon_ && this.equippedWeapon_.model_ && this.currentAction_) {
+            const currentAnimationName = this.currentAction_._clip.name;
+            if (currentAnimationName === 'SwordSlash' || currentAnimationName === 'Shoot_OneHanded') {
+                const weapon = this.equippedWeapon_.model_;
+                const currentAnimationTime = this.currentAction_.time;
+                const currentFrame = currentAnimationTime * 24; // 24 FPS 가정
 
-            // 공격 판정 구간 설정 (예: 11프레임부터 12프레임까지)
-            const StartFrame = 11;
-            const EndFrame = 12;
+                // 공격 판정 구간 설정
+                let StartFrame, EndFrame;
+                if (currentAnimationName === 'SwordSlash') {
+                    // 근접 공격 판정 구간 (예: 11프레임부터 12프레임까지)
+                    StartFrame = 11;
+                    EndFrame = 12;
+                } else if (currentAnimationName === 'Shoot_OneHanded') {
+                    // 원거리 공격 판정 구간 (예: 5프레임부터 6프레임까지)
+                    StartFrame = 5;
+                    EndFrame = 6;
+                }
 
-            if (currentFrame >= StartFrame && currentFrame < EndFrame) {
-                this.canDamage_ = true;
-            } else {
-                this.canDamage_ = false;
-            }
+                if (currentFrame >= StartFrame && currentFrame < EndFrame) {
+                    this.canDamage_ = true;
+                } else {
+                    this.canDamage_ = false;
+                }
 
-            // 실제 공격 판정 및 피해 적용
-            if (this.canDamage_ && !this.attackedThisFrame_) {
-                // 플레이어의 위치와 방향을 기반으로 공격 범위 정의
-                const playerPosition = this.mesh_.position;
-                const playerDirection = new THREE.Vector3();
-                this.mesh_.getWorldDirection(playerDirection);
-                playerDirection.y = 0; // Y축은 고려하지 않음
-                playerDirection.normalize();
+                // 실제 공격 판정 및 피해 적용
+                if (this.canDamage_ && !this.attackedThisFrame_) {
+                    // 플레이어의 위치와 방향을 기반으로 공격 범위 정의
+                    const playerPosition = this.mesh_.position;
+                    const playerDirection = new THREE.Vector3();
+                    this.mesh_.getWorldDirection(playerDirection);
+                    playerDirection.y = 0; // Y축은 고려하지 않음
+                    playerDirection.normalize();
 
-                // NPC 목록 순회 (this.params_.npcs가 존재한다고 가정)
-                if (this.params_.npcs) {
-                    this.params_.npcs.forEach(npc => {
-                        if (npc.model_ && !npc.isDead_) { // NPC가 존재하고 죽지 않았다면
-                            const npcPosition = npc.model_.position;
-                            const distance = playerPosition.distanceTo(npcPosition);
+                    // NPC 목록 순회 (this.params_.npcs가 존재한다고 가정)
+                    if (this.params_.npcs) {
+                        this.params_.npcs.forEach(npc => {
+                            if (npc.model_ && !npc.isDead_) { // NPC가 존재하고 죽지 않았다면
+                                const npcPosition = npc.model_.position;
+                                const distance = playerPosition.distanceTo(npcPosition);
 
-                            // 공격 반경 내에 있는지 확인
-                            if (distance <= this.currentAttackRadius) {
-                                const directionToNpc = npcPosition.clone().sub(playerPosition).normalize();
-                                const angle = playerDirection.angleTo(directionToNpc);
+                                // 공격 반경 내에 있는지 확인
+                                if (distance <= this.currentAttackRadius) {
+                                    const directionToNpc = npcPosition.clone().sub(playerPosition).normalize();
+                                    const angle = playerDirection.angleTo(directionToNpc);
 
-                                // 공격 각도 내에 있는지 확인
-                                if (angle <= this.currentAttackAngle / 2) { // 각도는 중심에서 양쪽으로 퍼지므로 절반
-                                    // 이미 피해를 입은 적이 아니라면
-                                    if (!this.hitEnemies_.has(npc)) {
-                                        // NPC에게 피해 적용
-                                        npc.TakeDamage(this.currentAttackDamage);
-                                        this.hitEnemies_.add(npc); // 피해를 입힌 적 추가
-                                        this.attackedThisFrame_ = true; // 한 프레임에 한 번만 공격하도록 설정
+                                    // 공격 각도 내에 있는지 확인
+                                    if (angle <= this.currentAttackAngle / 2) { // 각도는 중심에서 양쪽으로 퍼지므로 절반
+                                        // 이미 피해를 입은 적이 아니라면
+                                        if (!this.hitEnemies_.has(npc)) {
+                                            // NPC에게 피해 적용
+                                            npc.TakeDamage(this.currentAttackDamage);
+                                            this.hitEnemies_.add(npc); // 피해를 입힌 적 추가
+                                            this.attackedThisFrame_ = true; // 한 프레임에 한 번만 공격하도록 설정
+                                        }
                                     }
                                 }
                             }
-                        }
-                    });
+                        });
+                    }
+                }
+
+                // 무기 회전 로직 (근접 공격만)
+                if (currentAnimationName === 'SwordSlash') {
+                    let targetRotationX = Math.PI / 2; // 기본 수평
+                    
+                    if (currentFrame >= 11 && currentFrame < 17) {
+                        // 11 ~ 16 프레임: 안쪽으로 꺾임
+                        const startFrame = 11;
+                        const endFrame = 16;
+                        const progress = (currentFrame - startFrame) / (endFrame - startFrame);
+                        targetRotationX = THREE.MathUtils.lerp(Math.PI / 2, Math.PI / 2 + Math.PI / 8, progress);
+                    } else if (currentFrame >= 17) {
+                        // 17 프레임 이후: 오른쪽으로 꺾임
+                        const startFrame = 17;
+                        const endFrame = 25; // 애니메이션 끝 프레임
+                        const progress = (currentFrame - startFrame) / (endFrame - startFrame);
+                        targetRotationX = THREE.MathUtils.lerp(Math.PI / 2 + Math.PI / 8, Math.PI / 2 - Math.PI / 8, progress);
+                    }
+                    weapon.rotation.set(targetRotationX, Math.PI / 2, 0);
                 }
             }
-
-            let targetRotationX = Math.PI / 2; // 기본 수평
-            
-            if (currentFrame >= 11 && currentFrame < 17) {
-                // 11 ~ 16 프레임: 안쪽으로 꺾임
-                const startFrame = 11;
-                const endFrame = 16;
-                const progress = (currentFrame - startFrame) / (endFrame - startFrame);
-                targetRotationX = THREE.MathUtils.lerp(Math.PI / 2, Math.PI / 2 + Math.PI / 8, progress);
-            } else if (currentFrame >= 17) {
-                // 17 프레임 이후: 오른쪽으로 꺾임
-                const startFrame = 17;
-                const endFrame = 25; // 애니메이션 끝 프레임
-                const progress = (currentFrame - startFrame) / (endFrame - startFrame);
-                targetRotationX = THREE.MathUtils.lerp(Math.PI / 2 + Math.PI / 8, Math.PI / 2 - Math.PI / 8, progress);
-            }
-            weapon.rotation.set(targetRotationX, Math.PI / 2, 0);
         }
 
         if (this.attackTimer_ <= 0) {
@@ -628,7 +681,7 @@ export const player = (() => {
           if (isMoving) {
               this.SetAnimation_(isRunning ? 'Run' : 'Walk');
           } else {
-              this.SetAnimation_('Idle');
+              this.SetAnimation_('Idle'); // 기본 모션
           }
       }
 

@@ -22,6 +22,8 @@ export const object = (() => {
       this.attackCooldownTimer_ = 0;
       this.headBone = null;
       this.attackAngle_ = Math.PI / 1.5; // NPC 공격 부채꼴 각도 (120도)
+      this.attackRadius = 2.0; // NPC 공격 반경 추가
+      this.attackDamage = 15; // NPC 공격 데미지
       this.isCurrentAnimationAttack_ = false; // 현재 애니메이션이 공격 애니메이션인지 여부
       this.isDead_ = false; // NPC 사망 여부
       this.respawnTimer_ = 0; // 부활 타이머
@@ -29,19 +31,21 @@ export const object = (() => {
     }
 
     TakeDamage(damage) {
+      if (this.isDead_) return; // 이미 죽었으면 무시
+      
       const oldHealth = this.health_;
       this.health_ -= damage;
       if (this.health_ < 0) {
         this.health_ = 0;
       }
-      console.log(`NPC took ${damage} damage. Health changed from ${oldHealth} to ${this.health_}.`);
       if (this.health_ <= 0) {
         this.health_ = 0;
         this.isDead_ = true;
         this.respawnTimer_ = 5.0; // 5초 후 부활
         this.SetAnimation_('Death'); // NPC 사망 애니메이션
+        console.log(`NPC ${this.name_} took ${damage} damage and died. Health: ${this.health_}`);
       } else {
-        this.SetAnimation_('ReceiveHit'); // 피해를 입었을 때 ReceiveHit 애니메이션 호출
+        console.log(`NPC ${this.name_} took ${damage} damage. Health: ${oldHealth} → ${this.health_}`);
       }
     }
 
@@ -68,21 +72,14 @@ export const object = (() => {
 
         this.mixer_ = new THREE.AnimationMixer(model);
         this.mixer_.addEventListener('finished', (e) => {
-          // 공격 애니메이션이 끝나면 상태 초기화
-          if (this.isCurrentAnimationAttack_) {
-            this.isAttacking_ = false;
-            this.canDamage_ = false;
-            this.SetAnimation_('Idle');
-          } else if (e.action.getClip().name === 'ReceiveHit') {
-            if (!this.isDead_) {
-              this.SetAnimation_('Idle');
-            }
-          } 
+          // 애니메이션 완료 이벤트 처리 (피격 모션 제거됨)
+          // 필요한 경우 여기에 다른 애니메이션 완료 로직 추가
         });
 
         for (const clip of gltf.animations) {
           this.animations_[clip.name] = this.mixer_.clipAction(clip);
         }
+        console.log(`NPC ${this.name_} available animations:`, Object.keys(this.animations_));
         this.SetAnimation_('Idle');
       }, undefined, (error) => {
         console.error("Error loading NPC model:", error); // 추가
@@ -112,14 +109,18 @@ export const object = (() => {
     
 
     SetAnimation_(name) {
-      // 'Attack' 애니메이션이 없을 경우, 'SwordSlash'로 대체 시도
-      const animName = this.animations_[name] ? name : 'SwordSlash';
-      if (!this.animations_[animName]) {
-          console.warn(`NPC Animation ${name} (or SwordSlash) not found!`);
+      // 공격 애니메이션 완전 차단
+      if (name === 'SwordSlash' || name.includes('Attack')) {
+          console.log(`NPC ${this.name_} attack animation blocked: ${name}`);
           return;
       }
-
-      if (this.currentAction_ === this.animations_[animName]) return;
+      
+      // 애니메이션 이름 확인
+      const animName = this.animations_[name] ? name : 'Idle';
+      if (!this.animations_[animName]) {
+          console.warn(`NPC Animation ${name} not found! Using Idle instead.`);
+          return;
+      }
 
       if (this.currentAction_) {
         this.currentAction_.fadeOut(0.2);
@@ -127,27 +128,19 @@ export const object = (() => {
       this.currentAction_ = this.animations_[animName];
       this.currentAction_.reset().fadeIn(0.2).play();
 
-      // 현재 애니메이션이 공격 애니메이션인지 여부 설정
-      this.isCurrentAnimationAttack_ = (name.includes('Attack') || name === 'SwordSlash');
+      // 공격 애니메이션 관련 설정 제거
+      this.isCurrentAnimationAttack_ = false;
 
-      if (animName === 'SwordSlash') {
+      if (name === 'Death') {
         this.currentAction_.setLoop(THREE.LoopOnce, 1);
-        this.currentAction_.clampWhenFinished = true;
-      } else if (name === 'Death') {
-        this.currentAction_.setLoop(THREE.LoopOnce);
         this.currentAction_.clampWhenFinished = true;
       }
     }
 
     startAttack() {
-      if (this.attackCooldownTimer_ > 0 || this.isAttacking_) {
-        return;
-      }
-      this.isAttacking_ = true;
-      this.canDamage_ = true;
-      this.attackCooldownTimer_ = this.attackCooldown_;
-      // 'Attack' 애니메이션 실행 (모델에 따라 이름이 다를 수 있음)
-      this.SetAnimation_('SwordSlash');
+      // 공격 기능 비활성화 - NPC는 공격하지 않음
+      console.log(`NPC ${this.name_} attack disabled - NPC does not attack`);
+      return;
     }
 
     Update(timeElapsed) {
@@ -161,6 +154,9 @@ export const object = (() => {
         }
         return;
       }
+
+      // AI 공격 로직 - main.js에서 처리하므로 여기서는 제거
+      // 실제 공격 판정은 main.js의 UpdateCombat에서 처리됩니다
 
       if (this.mixer_) {
         this.mixer_.update(timeElapsed);

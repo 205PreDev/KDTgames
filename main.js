@@ -374,7 +374,9 @@ class GameStage3 {
             return;
         }
 
-        // NPC가 플레이어를 공격하는 로직
+        // NPC가 플레이어를 공격하는 로직 - 비활성화됨
+        // 플레이어가 가까이 가도 NPC가 공격하지 않도록 설정
+        /*
         this.npcs_.forEach(npc => {
             if (!npc.model_ || npc.isDead_) return; // NPC 모델이 없거나 죽었으면 스킵
 
@@ -382,8 +384,13 @@ class GameStage3 {
             const npcPos = new THREE.Vector2(npc.model_.position.x, npc.model_.position.z);
             const distance = playerPos.distanceTo(npcPos);
 
-            if (distance <= npc.attackRadius) { // NPC의 공격 반경 사용
-                if (npc.isAttacking_ && npc.canDamage_) {
+            // NPC AI: 플레이어가 공격 범위 내에 있고 쿨타임이 끝났으면 공격 시작
+            if (distance <= npc.attackRadius && npc.attackCooldownTimer_ <= 0 && !npc.isAttacking_ && !npc.isHit_) {
+                npc.startAttack();
+            }
+
+            // 공격 판정 및 피해 적용
+            if (distance <= npc.attackRadius && npc.isAttacking_ && npc.canDamage_) {
                     const npcToPlayer = this.player_.mesh_.position.clone().sub(npc.model_.position);
                     npcToPlayer.y = 0;
                     npcToPlayer.normalize();
@@ -401,7 +408,8 @@ class GameStage3 {
                     }
                 }
             }
-        });
+        );
+        */
     }
 
     UpdateCoordinateDisplays() {
