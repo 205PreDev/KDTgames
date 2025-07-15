@@ -6,6 +6,43 @@ import * as map from './map.js';
 import { WeaponManager, WeaponFactory } from '../weapon_system.js';
 import { AttackSystem } from '../attackSystem.js';
 
+// === 무기 회전 테이블 및 함수 추가 (파일 상단 import 아래에 위치) ===
+const weaponRotationTable = {
+  SwordSlash: [
+    { start: 11, end: 21, getRotation: (frame) => [
+      (frame - 11) / 10 * (Math.PI / 2), Math.PI / 2, 0
+    ]},
+    { start: 22, end: 22, getRotation: () => [Math.PI / 3, Math.PI / 2, 0]},
+    { start: 23, end: 23, getRotation: () => [Math.PI / 6, Math.PI / 2, 0]},
+    { start: 24, end: 24, getRotation: () => [0, Math.PI / 2, 0]},
+    { start: 0, end: 999, getRotation: () => [Math.PI / 2, Math.PI / 2, 0]},
+  ],
+  Shoot_OneHanded: [
+    { start: 0, end: 999, getRotation: () => [Math.PI / 2, Math.PI / 2, 0]},
+  ],
+  Idle: [
+    { start: 0, end: 999, getRotation: () => [Math.PI / 2, Math.PI / 2, 0]},
+  ],
+  Walk: [
+    { start: 0, end: 999, getRotation: () => [Math.PI / 2, Math.PI / 2, 0]},
+  ],
+  Run: [
+    { start: 0, end: 999, getRotation: () => [Math.PI / 2, Math.PI / 2, 0]},
+  ],
+  // 필요시 다른 애니메이션 추가
+};
+
+function getWeaponRotation(animationName, frame) {
+  const table = weaponRotationTable[animationName];
+  if (!table) return [Math.PI / 2, Math.PI / 2, 0]; // 기본값
+  for (const entry of table) {
+    if (frame >= entry.start && frame <= entry.end) {
+      return entry.getRotation(frame);
+    }
+  }
+  return [Math.PI / 2, Math.PI / 2, 0];
+}
+
 export const player = (() => {
 
   class Player {
@@ -416,37 +453,7 @@ export const player = (() => {
       this.currentAction_ = this.animations_[name];
       this.currentAction_.reset().fadeIn(0.3).play();
 
-      // --- 무기 자세 제어 로직 ---
-      if (this.equippedWeapon_ && this.equippedWeapon_.model_) {
-        const weapon = this.equippedWeapon_.model_;
-        switch (name) {
-          case 'SwordSlash':
-            weapon.position.set(-0.05, 0.05, -0.1);
-            weapon.rotation.set(Math.PI / 2, Math.PI / 2, 0); // Default rotation, will be overridden by Update
-            break;
-
-          case 'Shoot_OneHanded':
-            // 원거리 공격 시 무기 자세
-            weapon.position.set(-0.01, 0.09, 0.1);
-            weapon.rotation.set(Math.PI / 2, Math.PI / 2, 0);
-            break;
-
-          case 'Idle':
-          case 'Walk':
-          case 'Run':
-            // 평상시 자세: 무기를 옆으로 들고 있음
-            weapon.position.set(-0.01, 0.09, 0.1);
-            weapon.rotation.set(Math.PI / 2, Math.PI / 2, 0); // 옆으로 향함
-            break;
-
-          default:
-            // 기타 애니메이션(점프, 구르기 등)에서도 평상시 자세 유지
-            weapon.position.set(-0.01, 0.09, 0.1);
-            weapon.rotation.set(Math.PI / 2, Math.PI / 2, 0);
-            break;
-        }
-      }
-      // --- 무기 자세 제어 로직 끝 ---
+      
 
       if (name === 'Jump') {
         this.currentAction_.setLoop(THREE.LoopOnce);
@@ -529,86 +536,47 @@ export const player = (() => {
       if (this.isAttacking_) {
         this.attackTimer_ -= timeElapsed;
 
-        // 무기 회전 로직 - 근접 공격과 원거리 공격 모두 처리
-        if (this.equippedWeapon_ && this.equippedWeapon_.model_ && this.currentAction_) {
-            const currentAnimationName = this.currentAction_._clip.name;
-            if (currentAnimationName === 'SwordSlash' || currentAnimationName === 'Shoot_OneHanded') {
-                const weapon = this.equippedWeapon_.model_;
-                const currentAnimationTime = this.currentAction_.time;
-                const currentFrame = currentAnimationTime * 24; // 24 FPS 가정
+        if (this.equippedWeapon_ && this.equippedWeapon_.model_) {
+          const weapon = this.equippedWeapon_.model_;
+          const currentAnimationName = this.currentAction_ ? this.currentAction_._clip.name : 'Idle';
+          const currentAnimationTime = this.currentAction_ ? this.currentAction_.time : 0;
+          const currentFrame = Math.floor(currentAnimationTime * 24); // 24 FPS 기준
+          const [rx, ry, rz] = getWeaponRotation(currentAnimationName, currentFrame);
+          weapon.rotation.set(rx, ry, rz);
 
-                // 공격 판정 구간 설정
-                let StartFrame, EndFrame;
-                if (currentAnimationName === 'SwordSlash') {
-                    // 근접 공격 판정 구간 (예: 11프레임부터 12프레임까지)
-                    StartFrame = 11;
-                    EndFrame = 12;
-                } else if (currentAnimationName === 'Shoot_OneHanded') {
-                    // 원거리 공격 판정 구간 (예: 5프레임부터 6프레임까지)
-                    StartFrame = 5;
-                    EndFrame = 6;
+          // 공격 판정 구간 설정
+          let StartFrame, EndFrame;
+          if (currentAnimationName === 'SwordSlash') {
+              // 근접 공격 판정 구간 (예: 11프레임부터 12프레임까지)
+              StartFrame = 11;
+              EndFrame = 12;
+          } else if (currentAnimationName === 'Shoot_OneHanded') {
+              // 원거리 공격 판정 구간 (예: 5프레임부터 6프레임까지)
+              StartFrame = 5;
+              EndFrame = 6;
+          }
+
+          if (currentFrame >= StartFrame && currentFrame < EndFrame) {
+              this.canDamage_ = true;
+          } else {
+              this.canDamage_ = false;
+          }
+
+          // === [신규 시스템] 투사체 기반 판정 사용 (attackSystem.js, meleeProjectile.js) ===
+          if (this.canDamage_ && !this.attackedThisFrame_) {
+            if (this.attackSystem) {
+              const projectile = this.attackSystem.spawnMeleeProjectile({
+                position: this.mesh_.position.clone(),
+                direction: this.attackDirection_.clone(),
+                weapon: this.equippedWeapon_ || { damage: this.currentAttackDamage, range: this.currentAttackRadius },
+                attacker: this,
+                onHit: (npc) => {
                 }
-
-                if (currentFrame >= StartFrame && currentFrame < EndFrame) {
-                    this.canDamage_ = true;
-                } else {
-                    this.canDamage_ = false;
-                }
-
-                // === [신규 시스템] 투사체 기반 판정 사용 (attackSystem.js, meleeProjectile.js) ===
-                if (this.canDamage_ && !this.attackedThisFrame_) {
-                  if (this.attackSystem) {
-                    const projectile = this.attackSystem.spawnMeleeProjectile({
-                      position: this.mesh_.position.clone(),
-                      direction: this.attackDirection_.clone(),
-                      weapon: this.equippedWeapon_ || { damage: this.currentAttackDamage, range: this.currentAttackRadius },
-                      attacker: this,
-                      onHit: (npc) => {
-                      }
-                    });
-                    this.lastMeleeProjectile = projectile;
-                  }
-                  this.attackedThisFrame_ = true;
-                }
-                // === [구 시스템] 직접 충돌 판정 및 데미지 적용 ===
-                /*
-                if (this.canDamage_ && !this.attackedThisFrame_) {
-                    // 플레이어의 위치와 방향을 기반으로 공격 범위 정의
-                    const playerPosition = this.mesh_.position;
-                    const playerDirection = new THREE.Vector3();
-                    this.mesh_.getWorldDirection(playerDirection);
-                    playerDirection.y = 0; // Y축은 고려하지 않음
-                    playerDirection.normalize();
-
-                    // NPC 목록 순회 (this.params_.npcs가 존재한다고 가정)
-                    if (this.params_.npcs) {
-                        this.params_.npcs.forEach(npc => {
-                            if (npc.model_ && !npc.isDead_) { // NPC가 존재하고 죽지 않았다면
-                                const npcPosition = npc.model_.position;
-                                const distance = playerPosition.distanceTo(npcPosition);
-
-                                // 공격 반경 내에 있는지 확인
-                                if (distance <= this.currentAttackRadius) {
-                                    const directionToNpc = npcPosition.clone().sub(playerPosition).normalize();
-                                    const angle = playerDirection.angleTo(directionToNpc);
-
-                                    // 공격 각도 내에 있는지 확인
-                                    if (angle <= this.currentAttackAngle / 2) { // 각도는 중심에서 양쪽으로 퍼지므로 절반
-                                        // 이미 피해를 입은 적이 아니라면
-                                        if (!this.hitEnemies_.has(npc)) {
-                                            // NPC에게 피해 적용
-                                            npc.TakeDamage(this.currentAttackDamage);
-                                            this.hitEnemies_.add(npc); // 피해를 입힌 적 추가
-                                            this.attackedThisFrame_ = true; // 한 프레임에 한 번만 공격하도록 설정
-                                        }
-                                    }
-                                }
-                            }
-                        });
-                    }
-                }
-                */
+              });
+              this.lastMeleeProjectile = projectile;
             }
+            this.attackedThisFrame_ = true;
+          }
         }
 
         if (this.attackTimer_ <= 0) {
