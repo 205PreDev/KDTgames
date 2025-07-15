@@ -1,6 +1,1 @@
-2025-07-14 18:00
-- NPC 피격 시 항상 ReceiveHit 애니메이션 재생(무적 없음, 연속 피격 가능)
-- NPC TakeDamage 함수 attacker 인자 추가
-- 총기류(AssaultRifle, Pistol, Shotgun, SniperRifle, SubmachineGun) 스폰 시 스케일 0.5배 적용
-- 불필요한 콘솔 출력 및 주석 정리
-- object.js, item.js 등 관련 코드 정리 및 리팩토링
+feat: 투사체와 무기 회전 로직 적용

@@ -565,13 +565,27 @@ export const player = (() => {
           // === [신규 시스템] 투사체 기반 판정 사용 (attackSystem.js, meleeProjectile.js) ===
           if (this.canDamage_ && !this.attackedThisFrame_) {
             if (this.attackSystem) {
+              // 무기 타입에 따라 파라미터 분기
+              let type = 'sector';
+              let angle = this.currentAttackAngle;
+              let radius = this.currentAttackRadius;
+              if (this.equippedWeapon_ && this.equippedWeapon_.type === 'ranged') {
+                type = 'circle';
+                angle = 0; // 원거리 공격은 각도 의미 없음
+                radius = 0.5; // 필요시 무기별 값 사용
+              } else {
+                // 근접 공격은 반지름 1로 고정
+                radius = 1;
+              }
               const projectile = this.attackSystem.spawnMeleeProjectile({
                 position: this.mesh_.position.clone(),
                 direction: this.attackDirection_.clone(),
                 weapon: this.equippedWeapon_ || { damage: this.currentAttackDamage, range: this.currentAttackRadius },
                 attacker: this,
-                onHit: (npc) => {
-                }
+                onHit: (npc) => {},
+                type,
+                angle,
+                radius
               });
               this.lastMeleeProjectile = projectile;
             }

@@ -3,7 +3,7 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.124/build/three.module.js';
 
 export class MeleeProjectile {
-  constructor({ scene, position, direction, weapon, attacker, onHit }) {
+  constructor({ scene, position, direction, weapon, attacker, onHit, type = 'circle', angle = Math.PI / 2, radius = 3 }) {
     this.scene = scene;
     this.position = position.clone();
     this.direction = direction.clone().normalize();
@@ -13,7 +13,9 @@ export class MeleeProjectile {
     this.speed = 20; // 매우 빠른 속도 (짧은 시간 이동)
     this.range = weapon.range || weapon.attackRadius || 2.0;
     this.traveled = 0;
-    this.radius = 3; // 판정 hitbox 반경 (무기 크기에 따라 조정)
+    this.radius = radius || weapon.radius || 3; // 판정 hitbox 반경 (무기 크기에 따라 조정)
+    this.angle = angle || weapon.angle || Math.PI / 2; // 부채꼴 각도(라디안)
+    this.type = type; // 'sector' 또는 'circle'
     this.isDestroyed = false;
     // 시각화 필요시 아래 주석 해제
     // this.debugMesh = this.createDebugMesh();
@@ -27,6 +29,18 @@ export class MeleeProjectile {
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.copy(this.position);
     return mesh;
+  }
+
+  // 부채꼴 판정 함수
+  isInSector(targetPos) {
+    const toTarget = targetPos.clone().sub(this.position);
+    toTarget.y = 0;
+    const dist = toTarget.length();
+    if (dist > this.radius) return false;
+    const dirToTarget = toTarget.normalize();
+    const dot = this.direction.dot(dirToTarget);
+    const theta = Math.acos(dot); // 라디안
+    return theta <= this.angle / 2;
   }
 
   update(delta, npcs) {
@@ -44,8 +58,14 @@ export class MeleeProjectile {
 
         if (canNpcTakeDamage) {
           const npcPos = npc.model_.position;
-          const dist = this.position.distanceTo(npcPos);
-          if (dist <= this.radius + (npc.hitRadius || 0.7)) {
+          let hit = false;
+          if (this.type === 'sector') {
+            hit = this.isInSector(npcPos);
+          } else if (this.type === 'circle') {
+            const dist = this.position.distanceTo(npcPos);
+            hit = dist <= this.radius + (npc.hitRadius || 0.7);
+          }
+          if (hit) {
             // 타격 성공
             npc.TakeDamage(this.weapon.damage);
             if (this.attacker && this.attacker.hitEnemies_) { this.attacker.hitEnemies_.add(npc); }

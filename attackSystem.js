@@ -14,7 +14,10 @@ export class AttackSystem {
     direction, // THREE.Vector3 (캐릭터 전방)
     weapon, // 무기 데이터 (공격력, 사거리 등)
     attacker, // 플레이어 또는 NPC
-    onHit // (optional) 타격 시 콜백
+    onHit, // (optional) 타격 시 콜백
+    type = 'circle', // 'sector' 또는 'circle'
+    angle = Math.PI / 2, // 부채꼴 각도(라디안)
+    radius = 3 // 판정 반경
   }) {
     const projectile = new MeleeProjectile({
       scene: this.scene,
@@ -22,7 +25,10 @@ export class AttackSystem {
       direction,
       weapon,
       attacker,
-      onHit
+      onHit,
+      type,
+      angle,
+      radius
     });
     this.projectiles.push(projectile);
     return projectile;
