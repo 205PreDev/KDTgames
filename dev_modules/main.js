@@ -44,6 +44,10 @@ class GameStage3 {
         this.playerStatUI = playerStatUI;
         this.healthLogTimer_ = 0; // 헬스 로그 타이머 초기화
         this.npcs_ = []; // NPC들을 저장할 배열
+        this.weapons_ = []; // 무기 아이템들을 저장할 배열 초기화
+        this.weaponSpawnTimer_ = 0; // 무기 소환 타이머
+        this.weaponSpawnInterval_ = 10; // 무기 소환 주기 (10초)
+        this.MAX_WEAPONS_ON_MAP = 10; // 맵에 존재할 수 있는 최대 무기 개수
         this.Initialize();
         this.RAF();
     }
@@ -75,7 +79,9 @@ class GameStage3 {
         this.SetupLighting();
         this.SetupSkyAndFog();
         this.CreateGround();
-        this.CreateWeapons();
+        for (let i = 0; i < this.MAX_WEAPONS_ON_MAP; i++) {
+            this.spawnSingleWeapon(); // 게임 시작 시 MAX_WEAPONS_ON_MAP 개수만큼 무기 생성
+        }
         this.CreatePlayer();
 
         this.CreateCoordinateDisplays();
@@ -244,30 +250,32 @@ class GameStage3 {
 
     CreateWeapons() {
         this.weapons_ = [];
-        const weaponNames = [
-            'Sword.fbx', 'Axe_Double.fbx', 'Bow_Wooden.fbx', 'Dagger.fbx', 'Hammer_Double.fbx',
-            'AssaultRifle_1.fbx', 'Pistol_1.fbx', 'Shotgun_1.fbx', 'SniperRifle_1.fbx', 'SubmachineGun_1.fbx',
-            'Axe_Double_Golden.fbx', 'Axe_small_Golden.fbx', 'Bow_Golden.fbx', 'Dagger_Golden.fbx',
-            'Hammer_Double_Golden.fbx', 'Sword_big_Golden.fbx', 'Sword_big.fbx', 'Sword_Golden.fbx',
-            'Potion1_Filled.fbx' // Added Potion
-        ];
-        for (let i = 0; i < weaponNames.length; i++) {
-            const weaponName = weaponNames[i];
-            let pos;
-            if (weaponName === 'Potion1_Filled.fbx') {
-                pos = new THREE.Vector3(0, 1, 4); // Specific position for Potion
-            } else {
-                pos = new THREE.Vector3(math.rand_int(-20, 20), 1, math.rand_int(-20, 20));
-            }
-            
-            // 새로운 무기 시스템에서 데이터 가져오기
-            const weaponData = WEAPON_DATA[weaponName];
-            if (weaponData) {
-                const weapon = new Item(this.scene, weaponName, pos, weaponData.type, weaponData.radius, weaponData.angle, weaponData.damage, weaponData.attackSpeedMultiplier, weaponData.attackType, weaponData.specialEffect, weaponData.statEffect);
-                this.weapons_.push(weapon);
-            } else {
-                console.warn(`무기 데이터를 찾을 수 없습니다: ${weaponName}`);
-            }
+    }
+
+    spawnSingleWeapon() {
+        if (this.weapons_.length >= this.MAX_WEAPONS_ON_MAP) {
+            return; // 최대 개수에 도달하면 생성하지 않음
+        }
+
+        const weaponNames = Object.keys(WEAPON_DATA);
+        const randomIndex = math.rand_int(0, weaponNames.length - 1);
+        const weaponName = weaponNames[randomIndex];
+
+        // Potion은 특정 위치에만 생성되도록 예외 처리
+        let pos;
+        if (weaponName === 'Potion1_Filled.fbx') {
+            pos = new THREE.Vector3(0, 1, 4);
+        } else {
+            pos = new THREE.Vector3(math.rand_int(-20, 20), 1, math.rand_int(-20, 20));
+        }
+
+        const weaponData = WEAPON_DATA[weaponName];
+        if (weaponData) {
+            const weapon = new Item(this.scene, weaponName, pos, weaponData.type, weaponData.radius, weaponData.angle, weaponData.damage, weaponData.attackSpeedMultiplier, weaponData.attackType, weaponData.specialEffect, weaponData.statEffect);
+            this.weapons_.push(weapon);
+            console.log(`무기 생성: ${weaponName} (현재 ${this.weapons_.length}개)`);
+        } else {
+            console.warn(`무기 데이터를 찾을 수 없습니다: ${weaponName}`);
         }
     }
 
@@ -302,6 +310,13 @@ class GameStage3 {
         if (!this.prevTime) this.prevTime = time || performance.now();
         const delta = ((time || performance.now()) - this.prevTime) * 0.001;
         this.prevTime = time || performance.now();
+
+        // 무기 소환 타이머 업데이트 및 소환
+        this.weaponSpawnTimer_ += delta;
+        if (this.weaponSpawnTimer_ >= this.weaponSpawnInterval_) {
+            this.spawnSingleWeapon();
+            this.weaponSpawnTimer_ = 0;
+        }
 
         if (this.player_) {
             this.player_.Update(delta, this.rotationAngle);
