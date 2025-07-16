@@ -7,6 +7,7 @@ import { math } from './math.js';
 import { ui } from './ui.js';
 import { hp } from './hp.js';
 import { WEAPON_DATA, WeaponFactory, WeaponManager, ATTACK_TYPE_MELEE, ATTACK_TYPE_RANGED } from '../weapon_system.js';
+import { SoundManager } from './soundManager.js';
 
 
 // 전역에서 한 번만 생성
@@ -48,6 +49,7 @@ class GameStage3 {
         this.weaponSpawnTimer_ = 0; // 무기 소환 타이머
         this.weaponSpawnInterval_ = 10; // 무기 소환 주기 (10초)
         this.MAX_WEAPONS_ON_MAP = 10; // 맵에 존재할 수 있는 최대 무기 개수
+        this.soundManager = null; // SoundManager 인스턴스
         this.Initialize();
         this.RAF();
     }
@@ -71,6 +73,10 @@ class GameStage3 {
         this.camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
         this.camera.position.set(-8, 6, 12);
         this.camera.lookAt(0, 2, 0);
+
+        // SoundManager 초기화 및 사운드 로드
+        this.soundManager = new SoundManager(this.camera);
+        this.loadGameSounds();
 
         // 씬
         this.scene = new THREE.Scene();
@@ -96,6 +102,14 @@ class GameStage3 {
         });
 
         window.addEventListener('resize', () => this.OnWindowResize(), false);
+    }
+
+    loadGameSounds() {
+        // 사운드 파일 로드 (비동기 처리)
+        this.soundManager.loadSound('attack_swing', 'resources/audio/attack_swing.mp3');
+        this.soundManager.loadSound('hit_impact', 'resources/audio/hit_impact.mp3');
+        this.soundManager.loadSound('jump_sound', 'resources/audio/jump_sound.mp3');
+        // 필요한 다른 사운드들도 여기에 추가
     }
 
     SetupLighting() {
@@ -184,7 +198,8 @@ class GameStage3 {
             scene: this.scene,
             hpUI: this.playerHpUI,
             weapons: this.weapons_,
-            npcs: this.npcs_ // NPC 목록을 플레이어에게 전달
+            npcs: this.npcs_, // NPC 목록을 플레이어에게 전달
+            soundManager: this.soundManager // SoundManager 전달
         });
         this.playerHpUI.setTarget(this.player_);
         this.playerStatUI.show('Player');
@@ -192,7 +207,7 @@ class GameStage3 {
         window.playerInstance = this.player_;
         // NPC 생성
         const npcPos = new THREE.Vector3(0, 0, -4);
-        const newNpc = new object.NPC(this.scene, npcPos, 'Viking Warrior');
+        const newNpc = new object.NPC(this.scene, npcPos, 'Viking Warrior', this.soundManager);
         this.npcs_.push(newNpc); // NPC 배열에 추가
         this.npc_ = newNpc; // 기존 this.npc_ 참조 유지 (단일 NPC의 경우)
         this.npcHpUI.setTarget(this.npc_);
@@ -382,6 +397,39 @@ class GameStage3 {
         if (!this.player_ || !this.player_.mesh_ || this.npcs_.length === 0) {
             return;
         }
+
+        const playerPosition = this.player_.mesh_.position;
+        const playerRadius = this.player_.hitboxRadius_;
+
+        this.npcs_.forEach(npc => {
+            if (!npc.model_ || npc.isDead_) return; // NPC 모델이 없거나 죽었으면 스킵
+
+            const npcPosition = npc.model_.position;
+            const npcRadius = npc.hitboxRadius_;
+
+            const distanceVector = new THREE.Vector3().subVectors(playerPosition, npcPosition);
+            distanceVector.y = 0; // Y축은 무시하고 XZ 평면에서만 충돌 처리
+            const distance = distanceVector.length();
+
+            const minDistance = playerRadius + npcRadius;
+
+            if (distance < minDistance) {
+                // 충돌 발생
+                const overlap = minDistance - distance;
+                const direction = distanceVector.normalize();
+
+                // 플레이어와 NPC를 서로 밀어냄
+                // 각자의 질량이나 다른 요소를 고려하여 밀어내는 정도를 조절할 수 있음
+                // 여기서는 간단하게 절반씩 밀어냅니다.
+                const pushAmount = direction.multiplyScalar(overlap / 2);
+
+                this.player_.mesh_.position.add(pushAmount);
+                this.player_.position_.copy(this.player_.mesh_.position); // 플레이어 내부 위치도 업데이트
+
+                npc.model_.position.sub(pushAmount);
+                // NPC의 내부 위치도 업데이트가 필요하다면 여기에 추가
+            }
+        });
 
         // NPC가 플레이어를 공격하는 로직 - 비활성화됨
         // 플레이어가 가까이 가도 NPC가 공격하지 않도록 설정

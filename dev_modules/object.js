@@ -6,8 +6,9 @@ import * as map from './map.js'; // map.js import
 export const object = (() => {
 
   class NPC {
-    constructor(scene, position = new THREE.Vector3(0, 0, 0), name = 'NPC') {
+    constructor(scene, position = new THREE.Vector3(0, 0, 0), name = 'NPC', soundManager = null) {
       this.scene_ = scene;
+      this.soundManager_ = soundManager; // SoundManager 인스턴스 추가
       this.mixer_ = null;
       this.animations_ = {};
       this.currentAction_ = null;
@@ -53,6 +54,9 @@ export const object = (() => {
       } else {
         // 피격 중에도 무적 없음: 항상 ReceiveHit 재생
         this.SetAnimation_('ReceiveHit');
+        if (this.soundManager_) {
+          this.soundManager_.playSound('hit_impact');
+        }
         console.log(`NPC ${this.name_} took ${damage} damage. Health: ${oldHealth} → ${this.health_}`);
       }
     }

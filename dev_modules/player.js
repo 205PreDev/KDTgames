@@ -56,9 +56,9 @@ export const player = (() => {
       this.mixer_ = null;
       this.animations_ = {};
       this.currentAction_ = null;
-      this.currentAction_ = null;
       this.hp_ = this.maxHp_;
       this.isDead_ = false;
+      this.soundManager_ = params.soundManager; // SoundManager 인스턴스 추가
       this.keys_ = {
         forward: false,
         backward: false,
@@ -157,6 +157,9 @@ export const player = (() => {
         this.isHit_ = true;
         this.hitTimer_ = this.hitDuration_;
         this.SetAnimation_('ReceiveHit'); // 피해를 입었을 때 ReceiveHit 애니메이션 호출
+        if (this.soundManager_) {
+          this.soundManager_.playSound('hit_impact');
+        }
       }
     }
 
@@ -222,6 +225,9 @@ export const player = (() => {
             this.isJumping_ = true;
             this.velocityY_ = this.jumpPower_;
             this.SetAnimation_('Jump');
+            if (this.soundManager_) {
+              this.soundManager_.playSound('jump_sound');
+            }
           }
           break;
         case 'KeyJ':
@@ -615,6 +621,11 @@ export const player = (() => {
                 radius
               });
               this.lastMeleeProjectile = projectile;
+
+              // 공격 사운드 재생
+              if (this.soundManager_) {
+                this.soundManager_.playSound('attack_swing');
+              }
             }
             this.attackedThisFrame_ = true;
           }
