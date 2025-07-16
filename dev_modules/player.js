@@ -3,8 +3,9 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.124/build/three.mod
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.124/examples/jsm/loaders/GLTFLoader.js';
 import { Item } from './item.js';
 import * as map from './map.js';
-import { WeaponManager, WeaponFactory } from '../weapon_system.js';
-import { AttackSystem } from '../attackSystem.js';
+import { WEAPON_DATA, WeaponFactory, WeaponManager, ATTACK_TYPE_MELEE, ATTACK_TYPE_RANGED } from './weapon_system.js';
+import { AttackSystem } from './attackSystem.js';
+import { createMuzzleFlashEffect } from './effects.js';
 
 // === 무기 회전 테이블 및 함수 추가 (파일 상단 import 아래에 위치) ===
 const weaponRotationTable = {
@@ -605,6 +606,7 @@ export const player = (() => {
                 type = 'circle';
                 angle = 0; // 원거리 공격은 각도 의미 없음
                 radius = 0.5; // 필요시 무기별 값 사용
+                createMuzzleFlashEffect(this, this.params_.scene);
               }
               const projectileSpawnPosition = new THREE.Vector3(this.mesh_.position.x, 1.0, this.mesh_.position.z);
               

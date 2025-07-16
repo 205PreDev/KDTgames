@@ -1,1 +1,4 @@
-feat: 투사체와 무기 회전 로직 적용
+fix: effects.js 오류 수정 (플레이어 위치/회전 undefined 처리 및 light.dispose() 제거)
+
+- `createMeleeSwingEffect` 함수에서 `player` 또는 `player.position`, `player.rotation`이 `undefined`일 경우 발생하는 `TypeError`를 수정했습니다. 이제 해당 값들이 유효하지 않을 경우 함수가 조기에 반환됩니다.
+- `createMuzzleFlashEffect` 함수에서 `THREE.PointLight` 객체에 존재하지 않는 `dispose()` 메서드를 호출하여 발생하던 `TypeError`를 수정했습니다. `PointLight`는 `dispose()` 메서드를 가지지 않으므로, 해당 호출을 제거했습니다.

@@ -1,6 +1,7 @@
 // attackSystem.js
 // 공격 애니메이션 타격 타이밍에서 meleeProjectile 생성 트리거
 import { MeleeProjectile } from './meleeProjectile.js';
+import { createMeleeSwingEffect } from './effects.js'; // effects.js에서 함수 가져오기
 
 export class AttackSystem {
   constructor(scene) {
@@ -65,6 +66,7 @@ export class AttackSystem {
     angle = Math.PI / 2, // 부채꼴 각도(라디안)
     radius = 3 // 판정 반경
   }) {
+    createMeleeSwingEffect(attacker, this.scene);
     const params = {
       scene: this.scene,
       position,

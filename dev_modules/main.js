@@ -6,7 +6,7 @@ import { Item } from './item.js';
 import { math } from './math.js';
 import { ui } from './ui.js';
 import { hp } from './hp.js';
-import { WEAPON_DATA, WeaponFactory, WeaponManager, ATTACK_TYPE_MELEE, ATTACK_TYPE_RANGED } from '../weapon_system.js';
+import { WEAPON_DATA, WeaponFactory, WeaponManager, ATTACK_TYPE_MELEE, ATTACK_TYPE_RANGED } from './weapon_system.js';
 import { SoundManager } from './soundManager.js';
 
 
