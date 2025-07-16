@@ -600,10 +600,12 @@ export const player = (() => {
                 angle = 0; // 원거리 공격은 각도 의미 없음
                 radius = 0.5; // 필요시 무기별 값 사용
               }
+              const projectileSpawnPosition = new THREE.Vector3(this.mesh_.position.x, 1.0, this.mesh_.position.z);
+              
+              console.log(`[Player Debug] Spawning projectile at: X=${projectileSpawnPosition.x.toFixed(2)}, Y=${projectileSpawnPosition.y.toFixed(2)}, Z=${projectileSpawnPosition.z.toFixed(2)}`);
+
               const projectile = this.attackSystem.spawnMeleeProjectile({
-                position: (this.equippedWeapon_ && this.equippedWeapon_.model_)
-                  ? this.equippedWeapon_.model_.getWorldPosition(new THREE.Vector3())
-                  : this.mesh_.position.clone(),
+                position: projectileSpawnPosition,
                 direction: this.attackDirection_.clone(),
                 weapon: this.equippedWeapon_ || { damage: this.currentAttackDamage, range: this.currentAttackRadius },
                 attacker: this,

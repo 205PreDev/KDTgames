@@ -15,7 +15,7 @@ export class AttackSystem {
     if (this.projectilePool.length > 0) {
       projectile = this.projectilePool.pop();
       // 재사용 시 속성 재설정
-      projectile.scene = this.scene;
+      projectile.scene = params.scene; // scene도 재설정
       projectile.position.copy(params.position);
       projectile.direction.copy(params.direction);
       projectile.weapon = params.weapon;
@@ -24,10 +24,17 @@ export class AttackSystem {
       projectile.type = params.type;
       projectile.angle = params.angle;
       projectile.radius = params.radius;
+      projectile.speed = (params.speed !== undefined) ? params.speed : (params.weapon.projectileSpeed !== undefined ? params.weapon.projectileSpeed : 20); // speed도 재설정
+      projectile.range = params.weapon.range || params.weapon.attackRadius || 2.0; // range도 재설정
       projectile.traveled = 0;
       projectile.isDestroyed = false;
       projectile.projectileEffect = params.weapon.projectileEffect || null;
-      // 기타 속성도 필요시 재설정
+      // debugMesh를 항상 다시 생성하거나 업데이트
+      if (projectile.debugMesh) {
+        projectile.scene.remove(projectile.debugMesh); // 이전 메쉬 제거
+      }
+      projectile.debugMesh = projectile.createDebugMesh(); // 새롭게 생성
+      if (projectile.debugMesh && projectile.scene) projectile.scene.add(projectile.debugMesh);
     } else {
       projectile = new MeleeProjectile(params);
     }
@@ -35,7 +42,12 @@ export class AttackSystem {
     const originalDestroy = projectile.destroy.bind(projectile);
     projectile.destroy = () => {
       if (!projectile.isDestroyed) {
-        originalDestroy();
+        // debugMesh를 씬에서 제거하고 null로 설정하는 대신, 풀로 반환될 때만 제거
+        if (projectile.debugMesh && projectile.scene) {
+            projectile.scene.remove(projectile.debugMesh);
+            projectile.debugMesh = null; // 풀로 반환될 때 완전히 제거
+        }
+        originalDestroy(); // 원래 destroy 로직 호출 (isDestroyed = true 설정 등)
         this.projectilePool.push(projectile);
       }
     };
