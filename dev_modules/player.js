@@ -95,6 +95,8 @@ export const player = (() => {
       this.attackSpeed_ = 18; // Attack 이동 속도
       this.attackDirection_ = new THREE.Vector3(0, 0, 0); // Attack 방향
       this.isAttacking_ = false; // 공격 중인지 여부
+      this.isAerialAttacking_ = false; // 공중 공격 중인지 여부
+      this.hasSpawnedCurrentAerialHitbox_ = false; // 공중 공격 히트박스 생성 여부
       this.canDamage_ = false; // 피해를 줄 수 있는 상태인지 여부
       this.hpUI = params.hpUI || null;
       this.headBone = null; // 머리 뼈를 저장할 속성
@@ -239,7 +241,30 @@ export const player = (() => {
           if (this.isHit_) return; // 피격 중에는 공격 불가
           if (this.isAttacking_) return; // 이미 공격 중이면 새로운 공격 시작 불가
           if (this.attackCooldownTimer_ > 0) return; // 쿨다운 중이면 공격 불가
-          
+
+          // 공중 상태에서의 공격 (공중 공격)
+          if (this.isJumping_ && !this.isAerialAttacking_) {
+            this.isAerialAttacking_ = true;
+            this.isAttacking_ = true;
+            this.attackTimer_ = this.attackDuration_;
+            this.hasSpawnedCurrentAerialHitbox_ = false; // 히트박스 생성 여부 초기화
+            const moveDir = new THREE.Vector3();
+            this.mesh_.getWorldDirection(moveDir);
+            moveDir.y = 0;
+            moveDir.normalize();
+            this.attackDirection_.copy(moveDir);
+            // 무기 타입에 따라 애니메이션 분기
+            const isRangedWeapon = this.equippedWeapon_ && this.equippedWeapon_.type === 'ranged';
+            const aerialAttackAnimation = isRangedWeapon ? 'Shoot_OneHanded' : 'SwordSlash';
+            this.SetAnimation_(aerialAttackAnimation);
+            this.hitEnemies_.clear();
+            this.attackCooldownTimer_ = this.attackCooldown_;
+            this.animations_[aerialAttackAnimation].setLoop(THREE.LoopOnce);
+            this.animations_[aerialAttackAnimation].clampWhenFinished = true;
+            this.animations_[aerialAttackAnimation].reset();
+            return;
+          }
+          // 기존 지상 공격 로직
           // 원거리 무기인지 확인
           const isRangedWeapon = this.equippedWeapon_ && this.equippedWeapon_.type === 'ranged';
           const attackAnimation = isRangedWeapon ? 'Shoot_OneHanded' : 'SwordSlash';
@@ -489,13 +514,8 @@ export const player = (() => {
 
    
       SetAnimation_(name) {
-      // Prevent overriding attack animation with movement/idle
-      if (this.isAttacking_ && (name === 'Run' || name === 'Walk' || name === 'Idle')) {
-        return;
-      }
-
-      // Prevent overriding jump animation with movement/idle
-      if (this.isJumping_ && (name === 'Run' || name === 'Walk' || name === 'Idle')) {
+      // Prevent overriding attack animation with movement/idle/jump
+      if (this.isAttacking_ && (name === 'Run' || name === 'Walk' || name === 'Idle' || name === 'Jump')) {
         return;
       }
 
@@ -610,71 +630,120 @@ export const player = (() => {
       if (this.isAttacking_) {
         this.attackTimer_ -= timeElapsed;
 
-        if (this.equippedWeapon_ && this.equippedWeapon_.model_) {
-          const weapon = this.equippedWeapon_.model_;
+        // 공중 공격 애니메이션 동기화 및 판정 타이밍
+        if (this.isAerialAttacking_) {
           const currentAnimationName = this.currentAction_ ? this.currentAction_._clip.name : 'Idle';
           const currentAnimationTime = this.currentAction_ ? this.currentAction_.time : 0;
-          const currentFrame = Math.floor(currentAnimationTime * 24); // 24 FPS 기준
-          const [rx, ry, rz] = getWeaponRotation(currentAnimationName, currentFrame);
-          weapon.rotation.set(rx, ry, rz);
-
-          // 공격 판정 구간 설정
-          let StartFrame, EndFrame;
-          if (currentAnimationName === 'SwordSlash') {
-              // 근접 공격 판정 구간 (예: 11프레임부터 12프레임까지)
-              StartFrame = 11;
-              EndFrame = 12;
-          } else if (currentAnimationName === 'Shoot_OneHanded') {
-              // 원거리 공격 판정 구간 (예: 5프레임부터 6프레임까지)
-              StartFrame = 5;
-              EndFrame = 6;
-          }
-
+          const currentFrame = Math.floor(currentAnimationTime * 24);
+          // 공중 공격 판정 프레임 (예: 10~12프레임)
+          let StartFrame = 10, EndFrame = 12;
           if (currentFrame >= StartFrame && currentFrame < EndFrame) {
-              this.canDamage_ = true;
+            this.canDamage_ = true;
           } else {
-              this.canDamage_ = false;
+            this.canDamage_ = false;
           }
-
-          // === [신규 시스템] 투사체 기반 판정 사용 (attackSystem.js, meleeProjectile.js) ===
-          if (this.canDamage_ && !this.attackedThisFrame_) {
-            if (this.attackSystem) {
-              // 무기 타입에 따라 파라미터 분기
-              let type = 'sector';
-              let angle = this.currentAttackAngle;
-              let radius = this.currentAttackRadius;
-              if (this.equippedWeapon_ && this.equippedWeapon_.type === 'ranged') {
-                type = 'circle';
-                angle = 0; // 원거리 공격은 각도 의미 없음
-                radius = 0.5; // 필요시 무기별 값 사용
-                createMuzzleFlashEffect(this, this.params_.scene);
-              }
-              const projectileSpawnPosition = new THREE.Vector3(this.mesh_.position.x, 1.0, this.mesh_.position.z);
-              
-              
-
-              const projectile = this.attackSystem.spawnMeleeProjectile({
-                position: projectileSpawnPosition,
-                direction: this.attackDirection_.clone(),
-                weapon: this.equippedWeapon_ || { damage: this.currentAttackDamage, range: this.currentAttackRadius },
-                attacker: this,
-                onHit: (npc) => {},
-                type,
-                angle,
-                radius
-              });
-              this.lastMeleeProjectile = projectile;
-
-              // 공격 사운드 재생
-              if (this.soundManager_) {
-                this.soundManager_.playSound('attack_swing');
-              }
+          // 히트박스 생성은 한 번만
+          if (this.canDamage_ && !this.hasSpawnedCurrentAerialHitbox_) {
+            if (this.attackSystem && typeof this.attackSystem.createAerialAttackHitbox === 'function') {
+              this.attackSystem.createAerialAttackHitbox(this);
             }
-            this.attackedThisFrame_ = true;
+            if (this.soundManager_) {
+              this.soundManager_.playSound('attack_swing');
+            }
+            // 원거리 무기인 경우 총구 화염 이펙트 생성
+            if (this.equippedWeapon_ && this.equippedWeapon_.type === 'ranged') {
+              createMuzzleFlashEffect(this, this.params_.scene);
+            }
+            this.hasSpawnedCurrentAerialHitbox_ = true;
+          }
+          // 공중 공격 종료 처리
+          if (this.attackTimer_ <= 0 || this.position_.y <= 0) {
+            this.isAerialAttacking_ = false;
+            this.canDamage_ = false;
+            this.hasSpawnedCurrentAerialHitbox_ = false;
+            // 착지 시 Idle로, 아니면 Jump로 복귀
+            if (this.position_.y <= 0) {
+              this.SetAnimation_('Idle');
+            } else {
+              this.SetAnimation_('Jump');
+            }
+          }
+        } else {
+          if (this.equippedWeapon_ && this.equippedWeapon_.model_) {
+            const weapon = this.equippedWeapon_.model_;
+            const currentAnimationName = this.currentAction_ ? this.currentAction_._clip.name : 'Idle';
+            const currentAnimationTime = this.currentAction_ ? this.currentAction_.time : 0;
+            const currentFrame = Math.floor(currentAnimationTime * 24); // 24 FPS 기준
+            const [rx, ry, rz] = getWeaponRotation(currentAnimationName, currentFrame);
+            weapon.rotation.set(rx, ry, rz);
+
+            // 공격 판정 구간 설정
+            let StartFrame, EndFrame;
+            if (currentAnimationName === 'SwordSlash') {
+                // 근접 공격 판정 구간 (예: 11프레임부터 12프레임까지)
+                StartFrame = 11;
+                EndFrame = 12;
+            } else if (currentAnimationName === 'Shoot_OneHanded') {
+                // 원거리 공격 판정 구간 (예: 5프레임부터 6프레임까지)
+                StartFrame = 5;
+                EndFrame = 6;
+            }
+
+            if (currentFrame >= StartFrame && currentFrame < EndFrame) {
+                this.canDamage_ = true;
+            } else {
+                this.canDamage_ = false;
+            }
+
+            // === [신규 시스템] 투사체 기반 판정 사용 (attackSystem.js, meleeProjectile.js) ===
+            if (this.canDamage_ && !this.attackedThisFrame_) {
+              if (this.attackSystem) {
+                // 무기 타입에 따라 파라미터 분기
+                let type = 'sector';
+                let angle = this.currentAttackAngle;
+                let radius = this.currentAttackRadius;
+                if (this.equippedWeapon_ && this.equippedWeapon_.type === 'ranged') {
+                  type = 'circle';
+                  angle = 0; // 원거리 공격은 각도 의미 없음
+                  radius = 0.5; // 필요시 무기별 값 사용
+                  createMuzzleFlashEffect(this, this.params_.scene);
+                }
+                const projectileSpawnPosition = new THREE.Vector3(this.mesh_.position.x, 1.0, this.mesh_.position.z);
+                
+                
+
+                const projectile = this.attackSystem.spawnMeleeProjectile({
+                  position: projectileSpawnPosition,
+                  direction: this.attackDirection_.clone(),
+                  weapon: this.equippedWeapon_ || { damage: this.currentAttackDamage, range: this.currentAttackRadius },
+                  attacker: this,
+                  onHit: (npc) => {},
+                  type,
+                  angle,
+                  radius
+                });
+                this.lastMeleeProjectile = projectile;
+
+                // 공격 사운드 재생
+                if (this.soundManager_) {
+                  this.soundManager_.playSound('attack_swing');
+                }
+              }
+              this.attackedThisFrame_ = true;
+            }
           }
         }
 
+        // 공격 종료 처리 (공중/지상 모두)
         if (this.attackTimer_ <= 0) {
+          this.isAerialAttacking_ = false;
+          this.canDamage_ = false;
+          // 공중 공격 중 착지 시 Idle, 아니면 Jump, 지상 공격은 Idle
+          if (this.position_.y <= 0) {
+            this.SetAnimation_('Idle');
+          } else if (this.isAerialAttacking_) {
+            this.SetAnimation_('Jump');
+          }
         }
       }
 
@@ -743,27 +812,19 @@ export const player = (() => {
           this.SetAnimation_('Death');
       } else if (this.isRolling_) {
           this.SetAnimation_('Roll');
-      } else if (this.isJumping_) {
+      } else if (this.isAttacking_) { // 공격 중일 때 최우선
+          // 공격 애니메이션은 이미 SetAnimation_에서 설정되었으므로 여기서는 아무것도 하지 않음
+      } else if (this.isJumping_) { // 공격 중이 아니고 점프 중일 때
           this.SetAnimation_('Jump');
       } else if (this.isPicking_) {
         this.SetAnimation_('PickUp');
-      } else { // Not dead, rolling, jumping, or picking
-          // If an attack animation is currently playing, do not override it with movement/idle animations.
-          // The attack animation will continue until its 'finished' event.
-          if (this.isAttacking_) {
-              console.log(`[Update Anim Select] isAttacking_ is true. Not changing animation.`);
-              // Do nothing here. The attack animation is already set and playing.
-              // Physical movement is handled by separate logic.
+      } else { // Not dead, rolling, attacking, jumping, or picking
+          const isMoving = this.keys_.forward || this.keys_.backward || this.keys_.left || this.keys_.right;
+          const isRunning = isMoving && this.keys_.shift;
+          if (isMoving) {
+              this.SetAnimation_(isRunning ? 'Run' : 'Walk');
           } else {
-              // Not attacking, so handle movement/idle animations based on input.
-              const isMoving = this.keys_.forward || this.keys_.backward || this.keys_.left || this.keys_.right;
-              const isRunning = isMoving && this.keys_.shift;
-              
-              if (isMoving) {
-                  this.SetAnimation_(isRunning ? 'Run' : 'Walk');
-              } else {
-                  this.SetAnimation_('Idle'); // Default idle motion
-              }
+              this.SetAnimation_('Idle'); // Default idle motion
           }
       }
 

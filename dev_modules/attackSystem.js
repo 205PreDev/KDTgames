@@ -34,6 +34,36 @@ export class AttackSystem {
     return projectile;
   }
 
+  // 공중 공격용 히트박스 생성 함수
+  createAerialAttackHitbox(player) {
+    const position = player.mesh_.position.clone();
+    position.y += 1.0;
+    const direction = player.attackDirection_.clone();
+    const weapon = player.equippedWeapon_ || { damage: player.currentAttackDamage, range: player.currentAttackRadius, type: 'melee', attackRadius: 1.5, attackAngle: Math.PI / 2 };
+    const attacker = player;
+    // 무기 타입에 따라 MeleeProjectile의 type, angle, radius 설정
+    let projectileType = 'sector';
+    let projectileAngle = weapon.attackAngle || Math.PI / 2;
+    let projectileRadius = weapon.attackRadius || 1.5;
+    if (weapon.type === 'ranged') {
+      projectileType = 'circle';
+      projectileAngle = 0;
+      projectileRadius = weapon.range || 0.5;
+    }
+    const projectile = new MeleeProjectile({
+      scene: this.scene,
+      position,
+      direction,
+      weapon,
+      attacker,
+      type: projectileType,
+      angle: projectileAngle,
+      radius: projectileRadius
+    });
+    this.projectiles.push(projectile);
+    return projectile;
+  }
+
   // 매 프레임마다 호출 (game loop에서)
   update(delta, npcs) {
     this.projectiles = this.projectiles.filter(p => !p.isDestroyed);

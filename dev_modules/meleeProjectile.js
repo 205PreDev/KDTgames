@@ -65,8 +65,8 @@ export class MeleeProjectile {
   update(delta, npcs) {
     if (this.isDestroyed) return;
     if (this.debugMesh) this.debugMesh.position.copy(this.position);
-    if (this.type === 'sector') {
-      // sector(근접) 공격은 이동하지 않고, 생성 프레임에만 판정 후 바로 소멸
+    if (this.type === 'sector' || this.type === 'aerial') {
+      // sector(근접), aerial(공중) 공격은 이동하지 않고, 생성 프레임에만 판정 후 바로 소멸
       for (const npc of npcs) {
         if (npc.model_ && typeof npc.TakeDamage === 'function') {
           const canNpcTakeDamage = typeof npc.canTakeDamage === 'function' ? npc.canTakeDamage() : !npc.isDead_;
@@ -82,7 +82,7 @@ export class MeleeProjectile {
           }
         }
       }
-      // sector 타입은 생성 프레임에만 존재
+      // sector, aerial 타입은 생성 프레임에만 존재
       this.destroy();
       return;
     }
