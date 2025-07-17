@@ -1,6 +1,0 @@
-index.html:98 Live reload enabled.
-object.js:10 NPC constructor called for: Viking Warrior
-player.js:286 Available animations: Array(16)
-favicon.ico:1   Failed to load resource: the server responded with a status of 404 (Not Found)
-main.js:213 Calling renderCharacterFaceToProfile for player with mesh: Group
-main.js:363 NPC Health (5s interval): 150

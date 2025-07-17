@@ -1,6 +1,10 @@
+BlenderMCP/
 game/
+kcgame/
+resources/
 temp_game_repo/
 BlenderMCP/
 collider.js
-position.txt
-order.txt
+commit_message_temp.txt
+mission.txt
+marble/
