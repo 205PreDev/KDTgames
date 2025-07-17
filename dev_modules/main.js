@@ -8,6 +8,7 @@ import { ui } from './ui.js';
 import { hp } from './hp.js';
 import { WEAPON_DATA, WeaponFactory, WeaponManager, ATTACK_TYPE_MELEE, ATTACK_TYPE_RANGED } from './weapon_system.js';
 import { SoundManager } from './soundManager.js';
+import { initMuzzleFlashPool, muzzleFlashPool } from './effects.js';
 
 
 // 전역에서 한 번만 생성
@@ -80,6 +81,9 @@ class GameStage3 {
 
         // 씬
         this.scene = new THREE.Scene();
+
+        // 총구 화염 이펙트 풀 초기화
+        initMuzzleFlashPool(this.scene, 20);
 
         // 환경
         this.SetupLighting();
@@ -199,7 +203,8 @@ class GameStage3 {
             hpUI: this.playerHpUI,
             weapons: this.weapons_,
             npcs: this.npcs_, // NPC 목록을 플레이어에게 전달
-            soundManager: this.soundManager // SoundManager 전달
+            soundManager: this.soundManager, // SoundManager 전달
+            camera: this.camera // 카메라 인스턴스 전달
         });
         this.playerHpUI.setTarget(this.player_);
         this.playerStatUI.show('Player');
@@ -390,6 +395,9 @@ class GameStage3 {
 
         this.renderer.render(this.scene, this.camera);
         this.player_.attackSystem.update(delta, this.npcs_); // 투사체 시스템 업데이트
+        if (muzzleFlashPool) {
+            muzzleFlashPool.update(delta);
+        }
         this.UpdateCombat(delta);
     }
 

@@ -148,32 +148,6 @@ export const WEAPON_DATA = {
         rarity: 'legendary',
         description: '강력한 황금 양날도끼입니다.'
     },
-    'Bow_Golden.fbx': {
-        id: 'bow_golden',
-        name: '황금 활',
-        type: 'ranged',
-        category: 'medium',
-        radius: 20.0,
-        angle: Math.PI / 20,
-        damage: 35,
-        attackSpeedMultiplier: 1.2,
-        attackType: 'ranged',
-        specialEffect: 'piercing_shot',
-        ammoType: 'golden_arrow_ammo',
-        magazineSize: 1,
-        reloadTime: 1.8,
-        accuracy: 95,
-        recoil: 3,
-        fireMode: 'single',
-        durability: 250,
-        weight: 2.1,
-        cost: 1800,
-        rarity: 'legendary',
-        description: '정확하고 강력한 황금 활입니다.',
-        projectileSpeed: 40, // 추가: 투사체 속도
-        projectileSize: 0.5, // 추가: 투사체 크기(반지름)
-        projectileEffect: 'piercing' // 추가: 투사체 효과(예시)
-    },
     'Dagger_Golden.fbx': {
         id: 'dagger_golden',
         name: '황금 단검',
@@ -260,6 +234,7 @@ export const WEAPON_DATA = {
         id: 'pistol',
         name: '권총',
         type: 'ranged', 
+        subtype: 'firearm',
         category: 'light',
         radius: 10.0, 
         angle: Math.PI / 12, 
@@ -277,12 +252,16 @@ export const WEAPON_DATA = {
         weight: 1.0,
         cost: 500,
         rarity: 'common',
-        description: '빠른 재장전이 가능한 권총입니다.'
+        description: '빠른 재장전이 가능한 권총입니다.',
+        projectileSpeed: 40,
+        projectileSize: 0.2,
+        projectileEffect: null
     },
     'SubmachineGun_1.fbx': { 
         id: 'smg',
         name: '기관단총',
         type: 'ranged', 
+        subtype: 'firearm',
         category: 'medium',
         radius: 12.0, 
         angle: Math.PI / 18, 
@@ -306,6 +285,7 @@ export const WEAPON_DATA = {
         id: 'shotgun',
         name: '샷건',
         type: 'ranged', 
+        subtype: 'firearm',
         category: 'medium',
         radius: 8.0, 
         angle: Math.PI / 6, 
@@ -329,6 +309,7 @@ export const WEAPON_DATA = {
         id: 'sniper',
         name: '저격총',
         type: 'ranged', 
+        subtype: 'firearm',
         category: 'heavy',
         radius: 30.0, 
         angle: Math.PI / 90, 
@@ -352,6 +333,7 @@ export const WEAPON_DATA = {
         id: 'assault',
         name: '돌격소총',
         type: 'ranged', 
+        subtype: 'firearm',
         category: 'heavy',
         radius: 20.0, 
         angle: Math.PI / 36, 
@@ -371,29 +353,6 @@ export const WEAPON_DATA = {
         rarity: 'epic',
         description: '다목적 성능을 가진 돌격소총입니다.'
     },
-    'Bow_Wooden.fbx': { 
-        id: 'bow',
-        name: '활',
-        type: 'ranged', 
-        category: 'medium',
-        radius: 15.0, 
-        angle: Math.PI / 18, 
-        damage: 25, 
-        attackSpeedMultiplier: 1.0, 
-        attackType: 'ranged', 
-        specialEffect: null, // 추후 추가 예정
-        ammoType: 'arrow_ammo',
-        magazineSize: 1,
-        reloadTime: 2.0,
-        accuracy: 90,
-        recoil: 5,
-        fireMode: 'single',
-        durability: 200,
-        weight: 2.0,
-        cost: 600,
-        rarity: 'common',
-        description: '정확한 활입니다.'
-    },
 
     // 기존 아이템들 (호환성 유지)
     'Potion1_Filled.fbx': { 
@@ -406,7 +365,7 @@ export const WEAPON_DATA = {
         specialEffect: null, 
         statEffect: { stat: 'strength', amount: 1 } 
     }
-};
+};;
 
 // 기본 무기 클래스 (기존 Item 클래스와 호환)
 export class Weapon {
@@ -414,6 +373,7 @@ export class Weapon {
     this.id = config.id;
     this.name = config.name;
     this.type = config.type;
+    this.subtype = config.subtype || null; // subtype 추가
     this.category = config.category;
     this.damage = config.damage;
     this.range = config.radius || config.range;

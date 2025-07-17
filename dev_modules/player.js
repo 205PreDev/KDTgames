@@ -33,7 +33,7 @@ const weaponRotationTable = {
   // 필요시 다른 애니메이션 추가
 };
 
-function getWeaponRotation(animationName, frame) {
+function getWeaponRotation(animationName, frame, equippedWeapon) {
   const table = weaponRotationTable[animationName];
   if (!table) return [Math.PI / 2, Math.PI / 2, 0]; // 기본값
   for (const entry of table) {
@@ -68,6 +68,7 @@ export const player = (() => {
         shift: false,
         e_key: false,
         ctrl_key: false,
+        j_key: false, // J 키 상태 추가
       };
       this.inventory_ = [];
       this.equippedWeapon_ = null;
@@ -208,6 +209,7 @@ export const player = (() => {
     }
 
     OnKeyDown_(event) {
+      
       switch (event.code) {
         case 'KeyW': this.keys_.forward = true; break;
         case 'KeyS': this.keys_.backward = true; break;
@@ -232,11 +234,16 @@ export const player = (() => {
           }
           break;
         case 'KeyJ':
-          if (this.isAttacking_ || this.isHit_) return; // 공격 중이거나 피격 중에는 Attack 불가
+          this.keys_.j_key = true; // J 키 눌림 상태 업데이트
+          
+          if (this.isHit_) return; // 피격 중에는 공격 불가
+          if (this.isAttacking_) return; // 이미 공격 중이면 새로운 공격 시작 불가
+          if (this.attackCooldownTimer_ > 0) return; // 쿨다운 중이면 공격 불가
           
           // 원거리 무기인지 확인
           const isRangedWeapon = this.equippedWeapon_ && this.equippedWeapon_.type === 'ranged';
           const attackAnimation = isRangedWeapon ? 'Shoot_OneHanded' : 'SwordSlash';
+          
           
           if (
             !this.isJumping_ &&
@@ -254,6 +261,12 @@ export const player = (() => {
             this.SetAnimation_(attackAnimation); // 무기 타입에 따른 애니메이션 사용
             this.hitEnemies_.clear(); // 새로운 공격 시작 시 hitEnemies 초기화
             this.attackCooldownTimer_ = this.attackCooldown_;
+
+            // 공격 애니메이션 반복 설정
+            this.animations_[attackAnimation].setLoop(THREE.LoopOnce); // LoopOnce로 변경
+            this.animations_[attackAnimation].clampWhenFinished = true; // 애니메이션 종료 후 마지막 프레임 유지
+            this.animations_[attackAnimation].reset(); // 애니메이션을 처음부터 다시 시작
+            
           }
           break;
         case 'KeyL':
@@ -287,6 +300,7 @@ export const player = (() => {
     }
 
     OnKeyUp_(event) {
+      
       switch (event.code) {
         case 'KeyW': this.keys_.forward = false; break;
         case 'KeyS': this.keys_.backward = false; break;
@@ -299,6 +313,8 @@ export const player = (() => {
         case 'ShiftLeft':
         case 'ShiftRight':
           this.keys_.shift = false; break;
+        case 'KeyJ':
+          this.keys_.j_key = false; break;
       }
     }
 
@@ -329,16 +345,29 @@ export const player = (() => {
 
         this.mixer_.addEventListener('finished', (e) => {
           if (e.action.getClip().name === 'SwordSlash' || e.action.getClip().name === 'Shoot_OneHanded') {
-            this.isAttacking_ = false;
+            
             this.canDamage_ = false; // 공격 애니메이션 끝나면 초기화
             this.hitEnemies_.clear(); // 공격 종료 시 hitEnemies 초기화
-            // 공격 애니메이션이 끝나면 Idle 또는 Walk/Run 애니메이션으로 전환
-            const isMoving = this.keys_.forward || this.keys_.backward || this.keys_.left || this.keys_.right;
-            const isRunning = isMoving && this.keys_.shift;
-            if (isMoving) {
-                this.SetAnimation_(isRunning ? 'Run' : 'Walk');
+
+            // 애니메이션이 끝났을 때, J 키가 눌려있지 않다면 isAttacking_을 false로 설정하고 이동/대기 애니메이션으로 전환
+            // 자동 발사 무기 (fireMode === 'auto')가 아닌 경우에도 처리
+            // 애니메이션이 끝났을 때, J 키가 눌려있다면 공격 애니메이션을 다시 시작
+            if (this.keys_.j_key) {
+                this.attackCooldownTimer_ = this.attackCooldown_; // 쿨다운 재설정
+                this.currentAction_.reset(); // 현재 액션을 리셋
+                this.currentAction_.play(); // 다시 재생
+                
             } else {
-                this.SetAnimation_('Idle');
+                // J 키가 떼어졌다면 isAttacking_을 false로 설정하고 이동/대기 애니메이션으로 전환
+                this.isAttacking_ = false;
+                const isMoving = this.keys_.forward || this.keys_.backward || this.keys_.left || this.keys_.right;
+                const isRunning = isMoving && this.keys_.shift;
+                if (isMoving) {
+                    this.SetAnimation_(isRunning ? 'Run' : 'Walk');
+                } else {
+                    this.SetAnimation_('Idle');
+                }
+                
             }
           } else if (e.action.getClip().name === 'ReceiveHit') {
             // 피격 애니메이션이 끝나면 피격 상태 해제
@@ -357,6 +386,7 @@ export const player = (() => {
 
         for (const clip of gltf.animations) {
           this.animations_[clip.name] = this.mixer_.clipAction(clip);
+          
         }
         
         this.SetAnimation_('Idle');
@@ -428,14 +458,14 @@ export const player = (() => {
         this.UpdateDerivedStats();
       }
 
-      const handBone = this.mesh_.getObjectByName('FistR') || this.mesh_.getObjectByName('HandR');
+      const handBone = this.mesh_.getObjectByName('FistR');
       if (handBone && item.model_) {
         handBone.add(item.model_);
         item.model_.position.set(0, 0, 0.1);
         item.model_.rotation.set(0, 0, 0);
         item.model_.position.x = -0.01;
         item.model_.position.y = 0.09;
-        item.model_.rotation.x = Math.PI / 2;
+        item.model_.rotation.x = Math.PI;
         item.model_.rotation.y = Math.PI / 2;
         item.model_.rotation.z = Math.PI * 1.5;
         this.equippedWeapon_ = item; // Update currently equipped item
@@ -457,7 +487,18 @@ export const player = (() => {
 
     
 
-   SetAnimation_(name) {
+   
+      SetAnimation_(name) {
+      // Prevent overriding attack animation with movement/idle
+      if (this.isAttacking_ && (name === 'Run' || name === 'Walk' || name === 'Idle')) {
+        return;
+      }
+
+      // Prevent overriding jump animation with movement/idle
+      if (this.isJumping_ && (name === 'Run' || name === 'Walk' || name === 'Idle')) {
+        return;
+      }
+
       if (this.currentAction_ === this.animations_[name]) return;
       if (!this.animations_[name]) {
         console.warn(`Animation ${name} not found!`);
@@ -610,7 +651,7 @@ export const player = (() => {
               }
               const projectileSpawnPosition = new THREE.Vector3(this.mesh_.position.x, 1.0, this.mesh_.position.z);
               
-              console.log(`[Player Debug] Spawning projectile at: X=${projectileSpawnPosition.x.toFixed(2)}, Y=${projectileSpawnPosition.y.toFixed(2)}, Z=${projectileSpawnPosition.z.toFixed(2)}`);
+              
 
               const projectile = this.attackSystem.spawnMeleeProjectile({
                 position: projectileSpawnPosition,
@@ -634,7 +675,6 @@ export const player = (() => {
         }
 
         if (this.attackTimer_ <= 0) {
-            this.isAttacking_ = false;
         }
       }
 
@@ -707,16 +747,25 @@ export const player = (() => {
           this.SetAnimation_('Jump');
       } else if (this.isPicking_) {
         this.SetAnimation_('PickUp');
+      } else { // Not dead, rolling, jumping, or picking
+          // If an attack animation is currently playing, do not override it with movement/idle animations.
+          // The attack animation will continue until its 'finished' event.
+          if (this.isAttacking_) {
+              console.log(`[Update Anim Select] isAttacking_ is true. Not changing animation.`);
+              // Do nothing here. The attack animation is already set and playing.
+              // Physical movement is handled by separate logic.
+          } else {
+              // Not attacking, so handle movement/idle animations based on input.
+              const isMoving = this.keys_.forward || this.keys_.backward || this.keys_.left || this.keys_.right;
+              const isRunning = isMoving && this.keys_.shift;
+              
+              if (isMoving) {
+                  this.SetAnimation_(isRunning ? 'Run' : 'Walk');
+              } else {
+                  this.SetAnimation_('Idle'); // Default idle motion
+              }
+          }
       }
-       else if (!this.isAttacking_) { // 공격 중이 아닐 때만 이동/대기 애니메이션 처리
-          const isMoving = this.keys_.forward || this.keys_.backward || this.keys_.left || this.keys_.right;
-          const isRunning = isMoving && this.keys_.shift;
-          if (isMoving) {
-              this.SetAnimation_(isRunning ? 'Run' : 'Walk');
-            } else {
-                this.SetAnimation_('Idle'); // 기본 모션
-            }
-        }
 
       this.mesh_.position.copy(this.position_);
       // === 디버그 히트박스 위치 동기화 ===

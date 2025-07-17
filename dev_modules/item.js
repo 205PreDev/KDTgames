@@ -3,12 +3,13 @@ import { FBXLoader } from 'https://cdn.jsdelivr.net/npm/three@0.124/examples/jsm
 import { WEAPON_DATA, WeaponFactory } from '../weapon_system.js';
 
 export class Item {
-  constructor(scene, itemName, position = new THREE.Vector3(0, 0, 0), type = 'melee', attackRadius = 1.0, attackAngle = Math.PI / 2, damage = 10, attackSpeedMultiplier = 1.0, attackType = 'single', specialEffect = null, statEffect = null) {
+  constructor(scene, itemName, position = new THREE.Vector3(0, 0, 0), type = 'melee', subtype = null, attackRadius = 1.0, attackAngle = Math.PI / 2, damage = 10, attackSpeedMultiplier = 1.0, attackType = 'single', specialEffect = null, statEffect = null) {
     this.itemName = itemName; // Store item name
     this.scene_ = scene;
     this.model_ = null; // 모델을 저장할 속성 추가
     this.rangeIndicator_ = null; // 범위 표시 원 추가
     this.type = type;
+    this.subtype = subtype;
     this.attackRadius = attackRadius;
     this.attackAngle = attackAngle;
     this.damage = damage;
@@ -29,6 +30,7 @@ export class Item {
     const weaponData = WEAPON_DATA[this.itemName];
     if (weaponData) {
       this.type = weaponData.type;
+      this.subtype = weaponData.subtype; // subtype 추가
       this.attackRadius = weaponData.radius;
       this.attackAngle = weaponData.angle;
       this.damage = weaponData.damage;
@@ -88,7 +90,7 @@ export class Item {
 
   // 도구 기능을 위한 플레이스홀더
   use(player) {
-    console.log(`${this.itemName} used by ${player.name}`);
+    
     // 여기에 도구별 사용 로직 추가
   }
 }

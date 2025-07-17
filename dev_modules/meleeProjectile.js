@@ -30,10 +30,23 @@ export class MeleeProjectile {
       else if (this.projectileEffect === 'explosion') color = 0x0000ff;
       else color = 0xffaa00;
     }
-    const geometry = new THREE.SphereGeometry(this.radius, 12, 12);
-    const material = new THREE.MeshBasicMaterial({ color, wireframe: true });
+    // 투사체 모델을 BoxGeometry로 변경 (폭 0.5)
+    const geometry = new THREE.BoxGeometry(0.1, 0.3, this.radius * 2); // 폭 0.5, 높이 0.5, 깊이는 radius의 2배로 설정
+
+    // 텍스처 로드
+    const textureLoader = new THREE.TextureLoader();
+    const projectileTexture = textureLoader.load('./resources/backshot.png');
+
+    const material = new THREE.MeshBasicMaterial({ map: projectileTexture, color, wireframe: false }); // wireframe 제거, 텍스처 적용
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.copy(this.position);
+
+    // 투사체 방향에 따라 메시 회전
+    const quaternion = new THREE.Quaternion();
+    const up = new THREE.Vector3(0, 1, 0);
+    quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), this.direction); // 기본 Z축을 투사체 방향으로 정렬
+    mesh.setRotationFromQuaternion(quaternion);
+
     return mesh;
   }
 

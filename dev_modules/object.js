@@ -84,7 +84,13 @@ export const object = (() => {
 
         this.mixer_ = new THREE.AnimationMixer(model);
         this.mixer_.addEventListener('finished', (e) => {
-          // 애니메이션 완료 이벤트 처리
+          if (e.action.getClip().name === 'Attack') { // NPC 공격 애니메이션 이름이 'Attack'이라고 가정
+            this.isAttacking_ = false;
+            this.canDamage_ = false; // 공격 판정 초기화
+            this.SetAnimation_('Idle'); // 공격 후 Idle로 전환
+          } else if (e.action.getClip().name === 'Death') {
+            this.model_.visible = false; // 죽음 애니메이션 후 모델 숨기기
+          }
         });
 
         for (const clip of gltf.animations) {
@@ -130,6 +136,9 @@ export const object = (() => {
       this.currentAction_.reset().fadeIn(0.2).play();
 
       if (name === 'Death') {
+        this.currentAction_.setLoop(THREE.LoopOnce, 1);
+        this.currentAction_.clampWhenFinished = true;
+      } else if (name === 'Attack') { // NPC 공격 애니메이션 이름이 'Attack'이라고 가정
         this.currentAction_.setLoop(THREE.LoopOnce, 1);
         this.currentAction_.clampWhenFinished = true;
       }
