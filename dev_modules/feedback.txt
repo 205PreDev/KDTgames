@@ -1,0 +1,21 @@
+## 공격 중 이동 키 입력 시 공격 판정 유지 문제 (지상 공격)
+
+**문제점 분석:**
+지상 공격 중 이동 키를 눌러도 공격 모션은 유지되지만, 공격 판정(히트박스 생성 및 데미지 적용)이 더 이상 발생하지 않는 문제가 있습니다. 이는 `player.js`의 `Update` 함수 내에서 `this.attackTimer_`가 0 이하가 될 때 `this.isAttacking_` 플래그가 `false`로 설정되기 때문입니다. `attackDuration_` 값이 고정되어 있어 실제 공격 애니메이션이 끝나기 전에 `this.isAttacking_`가 `false`가 되면, `Update` 함수의 `if (this.isAttacking_)` 블록 전체가 더 이상 실행되지 않아 공격 판정 로직이 멈추게 됩니다.
+
+**해결책:**
+`this.isAttacking_` 플래그는 공격 애니메이션이 실제로 종료될 때만 `false`로 설정되어야 합니다. 이 역할은 `mixer_.addEventListener('finished', ...)` 콜백 함수에서 이미 처리하고 있으므로, `Update` 함수 내의 `attackTimer_` 기반 `isAttacking_` 초기화 로직을 **제거**해야 합니다. 이렇게 하면 공격 애니메이션이 재생되는 동안 `this.isAttacking_`는 계속 `true`를 유지하며, `Update` 함수 내의 공격 판정 로직이 정상적으로 작동하게 됩니다.
+
+**`player.js` 수정 제안:**
+`player.js` 파일의 `Update` 함수에서 다음 두 줄을 **제거**해야 합니다.
+
+1.  `if (this.isAerialAttacking_)` 블록 내부의 `if (this.attackTimer_ <= 0 || this.position_.y <= 0)` 조건문 안:
+    ```javascript
+    this.isAttacking_ = false; // 이 줄을 제거합니다.
+    ```
+2.  `else` (지상 공격) 블록 이후의 `if (this.attackTimer_ <= 0)` 조건문 안:
+    ```javascript
+    this.isAttacking_ = false; // 이 줄을 제거합니다.
+    ```
+
+---
