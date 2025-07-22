@@ -4,6 +4,7 @@ import { player } from './player.js';
 import { object } from './object.js';
 import { Item } from './item.js';
 import { math } from './math.js';
+import { hp } from './hp.js';
 import { WEAPON_DATA, WeaponFactory, WeaponManager, ATTACK_TYPE_MELEE, ATTACK_TYPE_RANGED } from './weapon_system.js';
 import { SoundManager } from './soundManager.js';
 import { initMuzzleFlashPool, muzzleFlashPool } from './effects.js';
@@ -153,11 +154,14 @@ export class GameStage3 {
   }
   CreatePlayer() {
     // 플레이어 생성 및 HP UI 연결
+    const localPlayerData = this.playerInfo.find(p => p.id === this.localPlayerId);
+
     this.player_ = new player.Player({
         scene: this.scene,
         weapons: this.weapons_,
         soundManager: this.soundManager, // SoundManager 전달
-        camera: this.camera // 카메라 인스턴스 전달
+        camera: this.camera, // 카메라 인스턴스 전달
+        hpUI: new hp.HPUI(this.scene, this.renderer, localPlayerData.nickname), // HPUI 인스턴스 생성 및 전달
     });
 // npc 제거
     // === 추가: window.playerInstance 할당 ===
@@ -263,6 +267,28 @@ export class GameStage3 {
     return new THREE.Vector3(0, 0.5, 0);
   }
 
+  CreateLocalPlayer() {
+    const npcPos = new THREE.Vector3(0, 0, -4);
+    this.npc_ = new object.NPC(this.scene, npcPos);
+
+    const localPlayerData = this.playerInfo.find(p => p.id === this.localPlayerId);
+
+    this.player_ = new player.Player({
+      scene: this.scene,
+      onDebugToggle: (visible) => this.npc_.ToggleDebugVisuals(visible),
+      character: localPlayerData.character,
+      hpUI: new hp.HPUI(this.scene, this.renderer, localPlayerData.nickname), // HPUI 인스턴스 생성 및 전달
+      getRespawnPosition: () => this.getRandomPosition(),
+      onLoad: () => {
+        const initialPosition = this.getRandomPosition();
+        this.player_.SetPosition([initialPosition.x, initialPosition.y, initialPosition.z]);
+      }
+    });
+
+    this.cameraTargetOffset = new THREE.Vector3(0, 15, 10);
+    this.rotationAngle = 4.715;
+  }
+  
   OnWindowResize() {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
