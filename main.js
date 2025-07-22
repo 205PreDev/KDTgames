@@ -10,14 +10,7 @@ import { WEAPON_DATA, WeaponFactory, WeaponManager, ATTACK_TYPE_MELEE, ATTACK_TY
 import { SoundManager } from './soundManager.js';
 import { initMuzzleFlashPool, muzzleFlashPool } from './effects.js';
 
-
-// 전역에서 한 번만 생성
-const gameUI = new ui.GameUI();
-const playerHpUI = new hp.HPUI();
-playerHpUI.setGameUI(gameUI); // 반드시 연결!
-const npcHpUI = new hp.HPUI(true);
-const npcUI = new ui.NPCUI();
-const playerStatUI = new ui.PlayerStatUI();
+// ui 전역 변수 선언 제거
 
 // === 디버그 히트박스 전역 플래그 ===
 window.DEBUG_MODE_HITBOXES = false;
@@ -27,25 +20,13 @@ window.addEventListener('keydown', (e) => {
     if (window.playerInstance && typeof window.playerInstance.setDebugHitboxVisible === 'function') {
       window.playerInstance.setDebugHitboxVisible(window.DEBUG_MODE_HITBOXES);
     }
-    if (window.npcList && Array.isArray(window.npcList)) {
-      window.npcList.forEach(npc => {
-        if (npc && typeof npc.setDebugHitboxVisible === 'function') {
-          npc.setDebugHitboxVisible(window.DEBUG_MODE_HITBOXES);
-        }
-      });
-    }
+// NPC 히트박스 출력 로직 제거
   }
 });
 
 class GameStage3 {
     constructor() {
-        // 이미 생성된 hpUI를 사용
-        this.playerHpUI = playerHpUI;
-        this.npcHpUI = npcHpUI;
-        this.npcUI = npcUI;
-        this.playerStatUI = playerStatUI;
-        this.healthLogTimer_ = 0; // 헬스 로그 타이머 초기화
-        this.npcs_ = []; // NPC들을 저장할 배열
+// ui 초기화 제거, npc 배열 제거
         this.weapons_ = []; // 무기 아이템들을 저장할 배열 초기화
         this.weaponSpawnTimer_ = 0; // 무기 소환 타이머
         this.weaponSpawnInterval_ = 10; // 무기 소환 주기 (10초)
@@ -95,15 +76,6 @@ class GameStage3 {
         this.CreatePlayer();
 
         this.CreateCoordinateDisplays();
-
-        // 'R' 키를 눌렀을 때 NPC 공격
-        window.addEventListener('keydown', (e) => {
-            if (e.code === 'KeyR') {
-                if (this.npc_ && typeof this.npc_.startAttack === 'function') {
-                    this.npc_.startAttack();
-                }
-            }
-        });
 
         window.addEventListener('resize', () => this.OnWindowResize(), false);
     }
@@ -200,71 +172,20 @@ class GameStage3 {
         // 플레이어 생성 및 HP UI 연결
         this.player_ = new player.Player({
             scene: this.scene,
-            hpUI: this.playerHpUI,
             weapons: this.weapons_,
-            npcs: this.npcs_, // NPC 목록을 플레이어에게 전달
             soundManager: this.soundManager, // SoundManager 전달
             camera: this.camera // 카메라 인스턴스 전달
         });
-        this.playerHpUI.setTarget(this.player_);
-        this.playerStatUI.show('Player');
+// npc 제거
         // === 추가: window.playerInstance 할당 ===
         window.playerInstance = this.player_;
-        // NPC 생성
-        const npcPos = new THREE.Vector3(0, 0, -4);
-        const newNpc = new object.NPC(this.scene, npcPos, 'Viking Warrior', this.soundManager);
-        this.npcs_.push(newNpc); // NPC 배열에 추가
-        this.npc_ = newNpc; // 기존 this.npc_ 참조 유지 (단일 NPC의 경우)
-        this.npcHpUI.setTarget(this.npc_);
-        // === 추가: window.npcList 할당 ===
-        window.npcList = this.npcs_;
-
+// npc 제거
         // 카메라 오프셋 및 회전
         this.cameraTargetOffset = new THREE.Vector3(0, 15, 10);
         this.rotationAngle = 4.715;
 
         // 마우스 드래그로 카메라 회전
         window.addEventListener('mousemove', (e) => this.OnMouseMove(e), false);
-
-        // 캐릭터 모델 로딩 후 얼굴 이미지 추출해서 HP UI에 반영
-        const checkAndRenderFace = () => {
-            if (this.player_ && this.player_.mesh_) {
-                this.playerHpUI.renderCharacterFaceToProfile(this.player_.mesh_, this.scene, this.renderer);
-            } else {
-                setTimeout(checkAndRenderFace, 100);
-            }
-        };
-        checkAndRenderFace();
-
-        const checkAndRenderNPCFace = () => {
-            if (this.npc_ && this.npc_.model_) {
-                this.npcHpUI.renderCharacterFaceToProfile(this.npc_.model_, this.scene, this.renderer);
-            } else {
-                setTimeout(checkAndRenderNPCFace, 100);
-            }
-        };
-        checkAndRenderNPCFace();
-    }
-
-    CreateCoordinateDisplays() {
-        const style = {
-            position: 'absolute',
-            background: 'rgba(0, 0, 0, 0.6)',
-            color: '#fff',
-            padding: '5px 10px',
-            borderRadius: '5px',
-            fontFamily: 'monospace',
-            fontSize: '12px',
-            zIndex: '1000',
-            pointerEvents: 'none',
-            userSelect: 'none',
-            transform: 'translate(-50%, -50%)'
-        };
-
-        this.playerCoordDisplay = document.createElement('div');
-        Object.assign(this.playerCoordDisplay.style, style);
-        document.body.appendChild(this.playerCoordDisplay);
-
         
     }
 
@@ -341,7 +262,7 @@ class GameStage3 {
         if (this.player_) {
             this.player_.Update(delta, this.rotationAngle);
             this.UpdateCamera();
-            this.playerHpUI.updateHP(this.player_.hp_);
+           
             if (this.player_.mesh_) {
                 const stats = {
                     health: `${this.player_.hp_} / ${this.player_.maxHp_}`,
@@ -350,34 +271,16 @@ class GameStage3 {
                     agility: this.player_.agility_,
                     stamina: this.player_.stamina_
                 };
-                // 마지막 투사체 정보 추가
-                if (this.player_.lastMeleeProjectile && !this.player_.lastMeleeProjectile.isDestroyed) {
-                  stats.projectilePosition = this.player_.lastMeleeProjectile.position;
-                  stats.projectileRadius = this.player_.lastMeleeProjectile.radius;
-                }
-                this.playerStatUI.updateStats(stats);
+                
+                
             }
         }
-        if (this.npc_ && this.npc_.model_) {
-            this.npc_.Update(delta);
-            this.npcHpUI.updateHP(this.npc_.health_);
-
-            // Update NPC UI position and visibility
-            const npcWorldPosition = new THREE.Vector3();
-            if (this.npc_.headBone) {
-                this.npc_.headBone.getWorldPosition(npcWorldPosition);
-            } else {
-                npcWorldPosition.copy(this.npc_.model_.position);
-            }
-            npcWorldPosition.y += 2.0; // Offset above head
-
-            const screenPosition = npcWorldPosition.clone().project(this.camera);
+        // 여기까지
 
             const width = window.innerWidth, height = window.innerHeight;
             const x = (screenPosition.x * width / 2) + width / 2;
             const y = -(screenPosition.y * height / 2) + height / 2;
 
-            // Check if NPC is on screen
             const isBehind = screenPosition.z > 1;
             const isOnScreen = x > 0 && x < width && y > 0 && y < height && !isBehind;
 
