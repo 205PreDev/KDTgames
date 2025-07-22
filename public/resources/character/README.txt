@@ -1,0 +1,28 @@
+This folder contains character image files for the game.
+Required character image files:
+- BlueSoldier_Female.png
+- Casual_Male.png
+- Casual2_Female.png
+- Casual3_Female.png
+- Chef_Hat.png
+- Cowboy_Female.png
+- Doctor_Female_Young.png
+- Goblin_Female.png
+- Goblin_Male.png
+- Kimono_Female.png
+- Knight_Golden_Male.png
+- Knight_Male.png
+- Ninja_Male.png
+- Ninja_Sand.png
+- Viking_Male.png
+- OldClassy_Male.png
+- Pirate_Male.png
+- Pug.png
+- Soldier_Male.png
+- Elf.png
+- Suit_Male.png
+- VikingHelmet.png
+- Wizard.png
+- Worker_Female.png
+- Zombie_Male.png
+- Cow.png

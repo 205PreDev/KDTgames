@@ -1,0 +1,28 @@
+This folder contains character model files for the game.
+Required character model files:
+- BlueSoldier_Female.gltf
+- Casual_Male.gltf
+- Casual2_Female.gltf
+- Casual3_Female.gltf
+- Chef_Hat.gltf
+- Cowboy_Female.gltf
+- Doctor_Female_Young.gltf
+- Goblin_Female.gltf
+- Goblin_Male.gltf
+- Kimono_Female.gltf
+- Knight_Golden_Male.gltf
+- Knight_Male.gltf
+- Ninja_Male.gltf
+- Ninja_Sand.gltf
+- Viking_Male.gltf
+- OldClassy_Male.gltf
+- Pirate_Male.gltf
+- Pug.gltf
+- Soldier_Male.gltf
+- Elf.gltf
+- Suit_Male.gltf
+- VikingHelmet.gltf
+- Wizard.gltf
+- Worker_Female.gltf
+- Zombie_Male.gltf
+- Cow.gltf
