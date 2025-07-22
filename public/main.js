@@ -158,6 +158,7 @@ export class GameStage3 {
 
     this.player_ = new player.Player({
         scene: this.scene,
+        character: localPlayerData.character,
         weapons: this.weapons_,
         soundManager: this.soundManager, // SoundManager 전달
         camera: this.camera, // 카메라 인스턴스 전달
@@ -311,42 +312,57 @@ export class GameStage3 {
 
   SetupSocketEvents() {
     this.socket.on('gameUpdate', (data) => {
-      // Update other players' positions
-      if (data.playerId === this.localPlayerId) return; // Don't update self
+      if (data.type === 'playerState') {
+        const playerData = data.data;
+        if (playerData.id === this.localPlayerId) return;
 
-      let otherPlayer = this.players[data.playerId];
-      if (!otherPlayer) {
-        const remotePlayerData = this.playerInfo.find(p => p.id === data.playerId);
-        // Create a new player object for the new player
-        otherPlayer = new player.Player({
-          scene: this.scene,
-          character: remotePlayerData.character,
-          isRemote: true,
-          hpUI: new hp.HPUI(this.scene, this.renderer, remotePlayerData.nickname) // 원격 플레이어 HPUI 생성
-        });
-        this.players[data.playerId] = otherPlayer;
-      }
-      otherPlayer.SetPosition(data.position);
-      otherPlayer.SetRotation(data.rotation);
-      if (data.animation) {
-        otherPlayer.SetRemoteAnimation(data.animation);
-      }
-      // 원격 플레이어 HP 업데이트
-      if (data.hp !== undefined) {
-        if (data.hp < otherPlayer.hp_) {
-          // HP가 감소했을 때만 TakeDamage 호출하여 애니메이션 트리거
-          otherPlayer.TakeDamage(otherPlayer.hp_ - data.hp);
-        } else if (data.hp === 100 && otherPlayer.isDead_) { // HP가 100으로 회복되고 죽은 상태였으면 리스폰 처리
-          otherPlayer.hp_ = data.hp;
-          otherPlayer.isDead_ = false;
-          otherPlayer.SetRemoteAnimation('Idle');
-          if (otherPlayer.hpUI) {
-            otherPlayer.hpUI.updateHP(data.hp);
-          }
-        } else {
-          otherPlayer.hp_ = data.hp;
-          if (otherPlayer.hpUI) {
-            otherPlayer.hpUI.updateHP(data.hp);
+        let otherPlayer = this.players[playerData.id];
+        if (!otherPlayer) {
+          const remotePlayerData = this.playerInfo.find(p => p.id === playerData.id);
+          otherPlayer = new player.Player({
+            scene: this.scene,
+            character: remotePlayerData.character,
+            isRemote: true,
+            hpUI: new hp.HPUI(this.scene, this.renderer, remotePlayerData.nickname)
+          });
+          this.players[playerData.id] = otherPlayer;
+        }
+        otherPlayer.UpdateRemoteState(playerData);
+      } else {
+        // 기존 방식의 데이터 처리 (하위 호환성)
+        if (data.playerId === this.localPlayerId) return;
+
+        let otherPlayer = this.players[data.playerId];
+        if (!otherPlayer) {
+          const remotePlayerData = this.playerInfo.find(p => p.id === data.playerId);
+          otherPlayer = new player.Player({
+            scene: this.scene,
+            character: remotePlayerData.character,
+            isRemote: true,
+            hpUI: new hp.HPUI(this.scene, this.renderer, remotePlayerData.nickname)
+          });
+          this.players[data.playerId] = otherPlayer;
+        }
+        otherPlayer.SetPosition(data.position);
+        otherPlayer.SetRotation(data.rotation);
+        if (data.animation) {
+          otherPlayer.SetAnimation_(data.animation);
+        }
+        if (data.hp !== undefined) {
+          if (data.hp < otherPlayer.hp_) {
+            otherPlayer.TakeDamage(otherPlayer.hp_ - data.hp);
+          } else if (data.hp === 100 && otherPlayer.isDead_) {
+            otherPlayer.hp_ = data.hp;
+            otherPlayer.isDead_ = false;
+            otherPlayer.SetAnimation_('Idle');
+            if (otherPlayer.hpUI) {
+              otherPlayer.hpUI.updateHP(data.hp);
+            }
+          } else {
+            otherPlayer.hp_ = data.hp;
+            if (otherPlayer.hpUI) {
+              otherPlayer.hpUI.updateHP(data.hp);
+            }
           }
         }
       }
