@@ -463,9 +463,7 @@ export const player = (() => {
             if (c.isMesh) {
               c.castShadow = true;
               c.receiveShadow = true;
-              if (c.material && !this.isRemote) {
-                c.material.color.offsetHSL(0, 0, 0.25);
-              }
+              
             }
             if (c.isBone && c.name === 'Head') {
               this.headBone = c;
