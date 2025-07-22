@@ -182,46 +182,51 @@ export const player = (() => {
     }
 
     TakeDamage(amount) {
-      if (!this.canTakeDamage()) return; // 피해를 받을 수 없는 상태면 무시
+      try {
+        if (!this.canTakeDamage()) return; // 피해를 받을 수 없는 상태면 무시
       
-      this.hp_ -= amount;
-      if (this.hp_ <= 0) {
-        this.hp_ = 0;
-        if (this.hpUI && typeof this.hpUI.forceDeath === 'function') {
-          this.hpUI.forceDeath();
+        this.hp_ -= amount;
+        if (this.hp_ <= 0) {
+          this.hp_ = 0;
+          if (this.hpUI && typeof this.hpUI.forceDeath === 'function') {
+            this.hpUI.forceDeath();
+          }
+          this.isDead_ = true;
+          this.respawnTimer_ = this.respawnDelay_;
+          this.SetAnimation_('Death');
+          
+          if (!this.isRemote) {
+            this.DisableInput_(); // 키 입력 비활성화
+          }
+        } else {
+          // 피격 상태 설정
+          this.isHit_ = true;
+          this.hitTimer_ = this.hitDuration_;
+          this.SetAnimation_('receievehit'); // 피해를 입었을 때 ReceiveHit 애니메이션 호출
+          if (this.soundManager_) {
+            this.soundManager_.playSound('hit_impact');
+          }
+          
+          // 피격 효과 (로컬 플레이어에게만 적용)
+          if (!this.isRemote && this.params_.hitEffect) {
+            this.params_.hitEffect.style.opacity = '1';
+            setTimeout(() => {
+              this.params_.hitEffect.style.opacity = '0';
+            }, 100); // 0.1초 동안 표시
+          }
         }
-        this.isDead_ = true;
-        this.respawnTimer_ = this.respawnDelay_;
-        this.SetAnimation_('Death');
         
-        if (!this.isRemote) {
-          this.DisableInput_(); // 키 입력 비활성화
-        }
-      } else {
-        // 피격 상태 설정
-        this.isHit_ = true;
-        this.hitTimer_ = this.hitDuration_;
-        this.SetAnimation_('receievehit'); // 피해를 입었을 때 ReceiveHit 애니메이션 호출
-        if (this.soundManager_) {
-          this.soundManager_.playSound('hit_impact');
+        // HP UI 업데이트
+        if (this.hpUI) {
+          this.hpUI.updateHP(this.hp_);
         }
         
-        // 피격 효과 (로컬 플레이어에게만 적용)
-        if (!this.isRemote && this.params_.hitEffect) {
-          this.params_.hitEffect.style.opacity = '1';
-          setTimeout(() => {
-            this.params_.hitEffect.style.opacity = '0';
-          }, 100); // 0.1초 동안 표시
-        }
+        // 네트워크 동기화 - 피격 상태 전송
+        this.SyncNetworkState();
+      } catch (err) {
+        console.error('[TakeDamage] 데미지 처리 오류:', err);
+        alert('네트워크 오류로 데미지 동기화에 실패했습니다.');
       }
-      
-      // HP UI 업데이트
-      if (this.hpUI) {
-        this.hpUI.updateHP(this.hp_);
-      }
-      
-      // 네트워크 동기화 - 피격 상태 전송
-      this.SyncNetworkState();
     }  
   Revive() {
       this.Respawn_();
@@ -440,99 +445,113 @@ export const player = (() => {
     }
 
     LoadModel_(characterName = 'Knight_Male') {
-      const loader = new GLTFLoader();
-      loader.setPath('./resources/Ultimate Animated Character Pack - Nov 2019/glTF/');
-      loader.load(`${characterName}.gltf`, (gltf) => {
-        const model = gltf.scene;
-        model.scale.setScalar(1);
-        model.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
-        this.mesh_ = model;
-        this.params_.scene.add(model);
-
-        model.traverse((c) => {
-          if (c.isMesh) {
-            c.castShadow = true;
-            c.receiveShadow = true;
-            if (c.material && !this.isRemote) {
-              c.material.color.offsetHSL(0, 0, 0.25);
-            }
-          }
-          if (c.isBone && c.name === 'Head') {
-            this.headBone = c;
-          }
-        }); 
-       // 고정된 크기의 바운딩 박스 초기화
-        const halfWidth = 0.65; // 너비: 1.0
-        const halfHeight = 3.2; // 높이: 2.5
-        const halfDepth = 0.65; // 깊이: 1.0
-        this.boundingBox_.set(
-          new THREE.Vector3(-halfWidth, 0, -halfDepth),
-          new THREE.Vector3(halfWidth, halfHeight, halfDepth)
-        );
-        this.boundingBox_.translate(this.position_);
-        this.boundingBoxHelper_ = new THREE.Box3Helper(this.boundingBox_, 0xff0000);
-        this.boundingBoxHelper_.visible = false;
-        this.params_.scene.add(this.boundingBoxHelper_);
-
-        this.mixer_ = new THREE.AnimationMixer(model);
-
-        this.mixer_.addEventListener('finished', (e) => {
-          if (e.action.getClip().name === 'SwordSlash' || e.action.getClip().name === 'Shoot_OneHanded') {
-            
-            this.canDamage_ = false; // 공격 애니메이션 끝나면 초기화
-            this.hitEnemies_.clear(); // 공격 종료 시 hitEnemies 초기화
-
-            // 애니메이션이 끝났을 때, J 키가 눌려있지 않다면 isAttacking_을 false로 설정하고 이동/대기 애니메이션으로 전환
-            // 자동 발사 무기 (fireMode === 'auto')가 아닌 경우에도 처리
-            // 애니메이션이 끝났을 때, J 키가 눌려있다면 공격 애니메이션을 다시 시작
-            if (this.keys_.j_key) {
-                this.attackCooldownTimer_ = this.attackCooldown_; // 쿨다운 재설정
-                this.currentAction_.reset(); // 현재 액션을 리셋
-                this.currentAction_.play(); // 다시 재생
-                
-            } else {
-                // J 키가 떼어졌다면 isAttacking_을 false로 설정하고 이동/대기 애니메이션으로 전환
-                this.isAttacking_ = false;
-                const isMoving = this.keys_.forward || this.keys_.backward || this.keys_.left || this.keys_.right;
-                const isRunning = isMoving && this.keys_.shift;
-                if (isMoving) {
-                    this.SetAnimation_(isRunning ? 'Run' : 'Walk');
-                } else {
-                    this.SetAnimation_('Idle');
-                }
-                
-            }
-          } else if (e.action.getClip().name === 'receievehit') {
-            // 피격 애니메이션이 끝나면 피격 상태 해제
-            this.isHit_ = false;
-            this.hitTimer_ = 0;
-            // ReceiveHit 애니메이션이 끝나면 Idle 또는 Walk/Run 애니메이션으로 전환
-            const isMoving = this.keys_.forward || this.keys_.backward || this.keys_.left || this.keys_.right;
-            const isRunning = isMoving && this.keys_.shift;
-            if (isMoving) {
-                this.SetAnimation_(isRunning ? 'Run' : 'Walk');
-            } else {
-                this.SetAnimation_('Idle');
-            }
-          }
-        });  
-      for (const clip of gltf.animations) {
-          this.animations_[clip.name] = this.mixer_.clipAction(clip);
+      try {
+        if (!characterName || typeof characterName !== 'string') {
+          console.warn('[LoadModel_] 잘못된 캐릭터 이름, Knight_Male로 fallback');
+          characterName = 'Knight_Male';
         }
-        
-        this.SetAnimation_('Idle');
-        
-        // HPUI에 플레이어 mesh와 headBone 연결
-        if (this.hpUI) {
-          this.hpUI.setPlayerTarget(this.mesh_, this.headBone);
+        const loader = new GLTFLoader();
+        loader.setPath('./resources/Ultimate Animated Character Pack - Nov 2019/glTF/');
+        loader.load(`${characterName}.gltf`, (gltf) => {
+          const model = gltf.scene;
+          model.scale.setScalar(1);
+          model.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
+          this.mesh_ = model;
+          this.params_.scene.add(model);
+
+          model.traverse((c) => {
+            if (c.isMesh) {
+              c.castShadow = true;
+              c.receiveShadow = true;
+              if (c.material && !this.isRemote) {
+                c.material.color.offsetHSL(0, 0, 0.25);
+              }
+            }
+            if (c.isBone && c.name === 'Head') {
+              this.headBone = c;
+            }
+          }); 
+         // 고정된 크기의 바운딩 박스 초기화
+          const halfWidth = 0.65; // 너비: 1.0
+          const halfHeight = 3.2; // 높이: 2.5
+          const halfDepth = 0.65; // 깊이: 1.0
+          this.boundingBox_.set(
+            new THREE.Vector3(-halfWidth, 0, -halfDepth),
+            new THREE.Vector3(halfWidth, halfHeight, halfDepth)
+          );
+          this.boundingBox_.translate(this.position_);
+          this.boundingBoxHelper_ = new THREE.Box3Helper(this.boundingBox_, 0xff0000);
+          this.boundingBoxHelper_.visible = false;
+          this.params_.scene.add(this.boundingBoxHelper_);
+
+          this.mixer_ = new THREE.AnimationMixer(model);
+
+          this.mixer_.addEventListener('finished', (e) => {
+            if (e.action.getClip().name === 'SwordSlash' || e.action.getClip().name === 'Shoot_OneHanded') {
+              
+              this.canDamage_ = false; // 공격 애니메이션 끝나면 초기화
+              this.hitEnemies_.clear(); // 공격 종료 시 hitEnemies 초기화
+
+              // 애니메이션이 끝났을 때, J 키가 눌려있지 않다면 isAttacking_을 false로 설정하고 이동/대기 애니메이션으로 전환
+              // 자동 발사 무기 (fireMode === 'auto')가 아닌 경우에도 처리
+              // 애니메이션이 끝났을 때, J 키가 눌려있다면 공격 애니메이션을 다시 시작
+              if (this.keys_.j_key) {
+                  this.attackCooldownTimer_ = this.attackCooldown_; // 쿨다운 재설정
+                  this.currentAction_.reset(); // 현재 액션을 리셋
+                  this.currentAction_.play(); // 다시 재생
+                  
+              } else {
+                  // J 키가 떼어졌다면 isAttacking_을 false로 설정하고 이동/대기 애니메이션으로 전환
+                  this.isAttacking_ = false;
+                  const isMoving = this.keys_.forward || this.keys_.backward || this.keys_.left || this.keys_.right;
+                  const isRunning = isMoving && this.keys_.shift;
+                  if (isMoving) {
+                      this.SetAnimation_(isRunning ? 'Run' : 'Walk');
+                  } else {
+                      this.SetAnimation_('Idle');
+                  }
+                  
+              }
+            } else if (e.action.getClip().name === 'receievehit') {
+              // 피격 애니메이션이 끝나면 피격 상태 해제
+              this.isHit_ = false;
+              this.hitTimer_ = 0;
+              // ReceiveHit 애니메이션이 끝나면 Idle 또는 Walk/Run 애니메이션으로 전환
+              const isMoving = this.keys_.forward || this.keys_.backward || this.keys_.left || this.keys_.right;
+              const isRunning = isMoving && this.keys_.shift;
+              if (isMoving) {
+                  this.SetAnimation_(isRunning ? 'Run' : 'Walk');
+              } else {
+                  this.SetAnimation_('Idle');
+              }
+            }
+          });  
+        for (const clip of gltf.animations) {
+            this.animations_[clip.name] = this.mixer_.clipAction(clip);
+          }
+          
+          this.SetAnimation_('Idle');
+          
+          // HPUI에 플레이어 mesh와 headBone 연결
+          if (this.hpUI) {
+            this.hpUI.setPlayerTarget(this.mesh_, this.headBone);
+          }
+          
+          if (this.params_.onLoad) {
+            this.params_.onLoad();
+          }
+        }, undefined, (error) => {
+          console.error('glTF 로드 오류:', error, '기본 캐릭터로 fallback');
+          if (characterName !== 'Knight_Male') {
+            this.LoadModel_('Knight_Male');
+          }
+        });
+      } catch (err) {
+        console.error('[LoadModel_] 캐릭터 모델 로드 오류:', err);
+        if (characterName !== 'Knight_Male') {
+          this.LoadModel_('Knight_Male');
         }
-        
-        if (this.params_.onLoad) {
-          this.params_.onLoad();
-        }
-      }, undefined, (error) => {
-        console.error("Error loading model:", error);
-      });
+      }
       
       // === 디버그 히트박스 메시 생성 ===
       if (!this.debugHitboxMesh_) {
@@ -707,93 +726,86 @@ EquipItem(item) {
     // 네트워크 동기화 메서드 (고급 기능 통합)
     SyncNetworkState() {
       if (this.isRemote || !this.socket) return; // 원격 플레이어거나 소켓이 없으면 동기화하지 않음
-      
-      // 플레이어 상태 데이터 구성
-      const playerState = {
-        id: this.socket.id,
-        position: [this.position_.x, this.position_.y, this.position_.z],
-        rotation: [this.mesh_ ? this.mesh_.rotation.x : 0, this.mesh_ ? this.mesh_.rotation.y : 0, this.mesh_ ? this.mesh_.rotation.z : 0],
-        animation: this.currentAnimationName_,
-        hp: this.hp_,
-        isDead: this.isDead_,
-        isAttacking: this.isAttacking_,
-        isRolling: this.isRolling_,
-        isJumping: this.isJumping_,
-        isHit: this.isHit_,
-        weapon: this.equippedWeapon_ ? {
-          type: this.equippedWeapon_.type,
-          name: this.equippedWeapon_.name || this.equippedWeapon_.itemName,
-          itemName: this.equippedWeapon_.itemName || '',
-          attackRadius: this.equippedWeapon_.attackRadius || 1.5,
-          attackAngle: this.equippedWeapon_.attackAngle || Math.PI / 2,
-          damage: this.equippedWeapon_.damage || 10,
-          attackType: this.equippedWeapon_.attackType || 'single',
-          specialEffect: this.equippedWeapon_.specialEffect || null
-        } : null,
-        stats: {
-          strength: this.strength_,
-          agility: this.agility_,
-          stamina: this.stamina_,
-          speed: this.speed_
-        }
-      };
-      
-      // 소켓을 통해 상태 전송
-      this.socket.emit('gameUpdate', {
-        type: 'playerState',
-        data: playerState
-      });
+      try {
+        // 플레이어 상태 데이터 구성
+        const playerState = {
+          id: this.socket.id,
+          position: [this.position_.x, this.position_.y, this.position_.z],
+          rotation: [this.mesh_ ? this.mesh_.rotation.x : 0, this.mesh_ ? this.mesh_.rotation.y : 0, this.mesh_ ? this.mesh_.rotation.z : 0],
+          animation: this.currentAnimationName_ || 'Idle',
+          hp: this.hp_,
+          isDead: this.isDead_,
+          isAttacking: this.isAttacking_,
+          isRolling: this.isRolling_,
+          isJumping: this.isJumping_,
+          isHit: this.isHit_,
+          weapon: this.equippedWeapon_ ? {
+            type: this.equippedWeapon_.type,
+            name: this.equippedWeapon_.name || this.equippedWeapon_.itemName,
+            itemName: this.equippedWeapon_.itemName || '',
+            attackRadius: this.equippedWeapon_.attackRadius || 1.5,
+            attackAngle: this.equippedWeapon_.attackAngle || Math.PI / 2,
+            damage: this.equippedWeapon_.damage || 10,
+            attackType: this.equippedWeapon_.attackType || 'single',
+            specialEffect: this.equippedWeapon_.specialEffect || null
+          } : null,
+          stats: {
+            strength: this.strength_,
+            agility: this.agility_,
+            stamina: this.stamina_,
+            speed: this.speed_
+          },
+          character: this.params_.character || 'Knight_Male',
+        };
+        // 소켓을 통해 상태 전송 (상태 변화가 있을 때만 전송하도록 최적화 가능)
+        this.socket.emit('gameUpdate', {
+          type: 'playerState',
+          data: playerState
+        });
+      } catch (err) {
+        console.error('[SyncNetworkState] 상태 전송 오류:', err);
+      }
     }
     
-    // 원격 플레이어 상태 업데이트 (새로 추가)
+    // 원격 플레이어 상태 업데이트 (보완: 오류/누락 fallback)
     UpdateRemoteState(state) {
-      if (!this.isRemote) return; // 로컬 플레이어는 업데이트하지 않음
-      
-      // 위치 업데이트
-      if (state.position) {
-        this.SetPosition(state.position);
-      }
-      
-      // 회전 업데이트
-      if (state.rotation) {
-        this.SetRotation(state.rotation);
-      }
-      
-      // 애니메이션 업데이트
-      if (state.animation && state.animation !== this.currentAnimationName_) {
-        this.SetAnimation_(state.animation);
-      }
-      
-      // HP 업데이트
-      if (state.hp !== undefined && state.hp !== this.hp_) {
-        this.hp_ = state.hp;
-        if (this.hpUI) {
-          this.hpUI.updateHP(this.hp_);
+      if (!this.isRemote) return;
+      try {
+        // 위치 업데이트
+        if (state.position) this.SetPosition(state.position);
+        // 회전 업데이트
+        if (state.rotation) this.SetRotation(state.rotation);
+        // 애니메이션 업데이트 (유효성 체크)
+        if (state.animation && typeof state.animation === 'string') {
+          this.SetAnimation_(state.animation);
+        } else {
+          console.warn('[UpdateRemoteState] 잘못된 애니메이션 상태, Idle로 fallback');
+          this.SetAnimation_('Idle');
         }
+        // HP 업데이트
+        if (state.hp !== undefined && state.hp !== this.hp_) {
+          this.hp_ = state.hp;
+          if (this.hpUI) this.hpUI.updateHP(this.hp_);
+        }
+        // 상태 업데이트
+        if (state.isDead !== undefined) this.isDead_ = state.isDead;
+        if (state.isAttacking !== undefined) this.isAttacking_ = state.isAttacking;
+        if (state.isRolling !== undefined) this.isRolling_ = state.isRolling;
+        if (state.isJumping !== undefined) this.isJumping_ = state.isJumping;
+        if (state.isHit !== undefined) this.isHit_ = state.isHit;
+        // 캐릭터 동기화 (누락 시 fallback)
+        if (state.character && typeof state.character === 'string') {
+          if (this.params_.character !== state.character) {
+            this.params_.character = state.character;
+            this.LoadModel_(state.character);
+          }
+        } else if (!this.params_.character) {
+          this.params_.character = 'Knight_Male';
+          this.LoadModel_('Knight_Male');
+        }
+      } catch (err) {
+        console.error('[UpdateRemoteState] 원격 상태 적용 오류:', err);
       }
-      
-      // 상태 업데이트
-      if (state.isDead !== undefined) {
-        this.isDead_ = state.isDead;
-      }
-      
-      if (state.isAttacking !== undefined) {
-        this.isAttacking_ = state.isAttacking;
-      }
-      
-      if (state.isRolling !== undefined) {
-        this.isRolling_ = state.isRolling;
-      }
-      
-      if (state.isJumping !== undefined) {
-        this.isJumping_ = state.isJumping;
-      }
-      
-      if (state.isHit !== undefined) {
-        this.isHit_ = state.isHit;
-      }
-      
-      // 무기 업데이트 (추후 구현)
     }
     
     // 위치 설정 (원격 플레이어용)
@@ -1265,6 +1277,26 @@ EquipItem(item) {
       // 네트워크 동기화 - 주기적으로 상태 전송
       // 최적화를 위해 일정 시간마다 또는 중요한 상태 변화가 있을 때만 전송하는 것이 좋음
       this.SyncNetworkState();
+    }
+    // 공격 동기화: 공격 시 네트워크로 공격 정보 전송 (공격 애니메이션/데미지/위치 등)
+    AttackSync(attackInfo) {
+      if (this.isRemote || !this.socket) return;
+      try {
+        this.socket.emit('player-attack', attackInfo);
+      } catch (err) {
+        console.error('[AttackSync] 공격 정보 전송 오류:', err);
+      }
+    }
+    // 공격 정보 수신 시 처리 (외부에서 호출 필요)
+    OnRemoteAttack(attackInfo) {
+      try {
+        // 공격 애니메이션 및 이펙트 재생
+        if (!this.isRemote) return;
+        this.SetAnimation_('Attack');
+        // TODO: 공격 이펙트/피격 판정 등 추가 구현 가능
+      } catch (err) {
+        console.error('[OnRemoteAttack] 원격 공격 처리 오류:', err);
+      }
     }
   }
 
