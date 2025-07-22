@@ -319,15 +319,24 @@ export class GameStage3 {
         let otherPlayer = this.players[playerData.id];
         if (!otherPlayer) {
           const remotePlayerData = this.playerInfo.find(p => p.id === playerData.id);
+          // 캐릭터 정보 누락 시 fallback
+          const characterName = (remotePlayerData && remotePlayerData.character) ? remotePlayerData.character : 'Knight_Male';
+          if (!remotePlayerData || !remotePlayerData.character) {
+            console.warn('[SetupSocketEvents] 원격 플레이어 캐릭터 정보 누락, Knight_Male로 fallback');
+          }
           otherPlayer = new player.Player({
             scene: this.scene,
-            character: remotePlayerData.character,
+            character: characterName,
             isRemote: true,
-            hpUI: new hp.HPUI(this.scene, this.renderer, remotePlayerData.nickname)
+            hpUI: new hp.HPUI(this.scene, this.renderer, remotePlayerData ? remotePlayerData.nickname : 'Unknown')
           });
           this.players[playerData.id] = otherPlayer;
         }
-        otherPlayer.UpdateRemoteState(playerData);
+        try {
+          otherPlayer.UpdateRemoteState(playerData);
+        } catch (err) {
+          console.error('[SetupSocketEvents] 원격 플레이어 상태 업데이트 오류:', err);
+        }
       } else {
         // 기존 방식의 데이터 처리 (하위 호환성)
         if (data.playerId === this.localPlayerId) return;
@@ -335,36 +344,55 @@ export class GameStage3 {
         let otherPlayer = this.players[data.playerId];
         if (!otherPlayer) {
           const remotePlayerData = this.playerInfo.find(p => p.id === data.playerId);
+          const characterName = (remotePlayerData && remotePlayerData.character) ? remotePlayerData.character : 'Knight_Male';
+          if (!remotePlayerData || !remotePlayerData.character) {
+            console.warn('[SetupSocketEvents] 원격 플레이어 캐릭터 정보 누락, Knight_Male로 fallback');
+          }
           otherPlayer = new player.Player({
             scene: this.scene,
-            character: remotePlayerData.character,
+            character: characterName,
             isRemote: true,
-            hpUI: new hp.HPUI(this.scene, this.renderer, remotePlayerData.nickname)
+            hpUI: new hp.HPUI(this.scene, this.renderer, remotePlayerData ? remotePlayerData.nickname : 'Unknown')
           });
           this.players[data.playerId] = otherPlayer;
         }
-        otherPlayer.SetPosition(data.position);
-        otherPlayer.SetRotation(data.rotation);
-        if (data.animation) {
-          otherPlayer.SetAnimation_(data.animation);
-        }
-        if (data.hp !== undefined) {
-          if (data.hp < otherPlayer.hp_) {
-            otherPlayer.TakeDamage(otherPlayer.hp_ - data.hp);
-          } else if (data.hp === 100 && otherPlayer.isDead_) {
-            otherPlayer.hp_ = data.hp;
-            otherPlayer.isDead_ = false;
-            otherPlayer.SetAnimation_('Idle');
-            if (otherPlayer.hpUI) {
-              otherPlayer.hpUI.updateHP(data.hp);
-            }
+        try {
+          if (data.position) otherPlayer.SetPosition(data.position);
+          if (data.rotation) otherPlayer.SetRotation(data.rotation);
+          if (data.animation && typeof data.animation === 'string') {
+            otherPlayer.SetAnimation_(data.animation);
           } else {
-            otherPlayer.hp_ = data.hp;
-            if (otherPlayer.hpUI) {
-              otherPlayer.hpUI.updateHP(data.hp);
+            console.warn('[SetupSocketEvents] 잘못된 애니메이션 상태, Idle로 fallback');
+            otherPlayer.SetAnimation_('Idle');
+          }
+          if (data.hp !== undefined) {
+            if (data.hp < otherPlayer.hp_) {
+              otherPlayer.TakeDamage(otherPlayer.hp_ - data.hp);
+            } else if (data.hp === 100 && otherPlayer.isDead_) {
+              otherPlayer.hp_ = data.hp;
+              otherPlayer.isDead_ = false;
+              otherPlayer.SetAnimation_('Idle');
+              if (otherPlayer.hpUI) otherPlayer.hpUI.updateHP(data.hp);
+            } else {
+              otherPlayer.hp_ = data.hp;
+              if (otherPlayer.hpUI) otherPlayer.hpUI.updateHP(data.hp);
             }
           }
+        } catch (err) {
+          console.error('[SetupSocketEvents] 원격 플레이어 동기화 오류:', err);
         }
+      }
+    });
+
+    // 공격 동기화: player-attack 이벤트 수신 및 처리
+    this.socket.on('player-attack', (attackInfo) => {
+      try {
+        const attacker = this.players[attackInfo.id];
+        if (attacker && attacker.isRemote) {
+          attacker.OnRemoteAttack(attackInfo);
+        }
+      } catch (err) {
+        console.error('[player-attack] 공격 동기화 오류:', err);
       }
     });
 
