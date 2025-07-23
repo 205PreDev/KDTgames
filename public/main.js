@@ -5,7 +5,7 @@ import { object } from './object.js';
 import { Item } from './item.js';
 import { math } from './math.js';
 import { hp } from './hp.js';
-import { WEAPON_DATA, WeaponFactory, WeaponManager, ATTACK_TYPE_MELEE, ATTACK_TYPE_RANGED } from './weapon_system.js';
+import { WEAPON_DATA, WeaponFactory, WeaponManager, ATTACK_TYPE_MELEE, ATTACK_TYPE_RANGED, loadWeaponData } from './weapon_system.js';
 import { SoundManager } from './soundManager.js';
 import { initMuzzleFlashPool, muzzleFlashPool } from './effects.js';
 
@@ -23,7 +23,10 @@ export class GameStage3 {
     this.localPlayerId = socket.id;
     this.playerInfo = players;
     this.map = map;
+  }
 
+  async initGameStage() {
+    await loadWeaponData(); // 무기 데이터 로드
     this.Initialize();
     this.RAF();
     this.SetupSocketEvents();
@@ -766,10 +769,11 @@ socket.on('updatePlayers', (players, maxPlayers) => {
   }
 });
 
-socket.on('startGame', (gameInfo) => {
+socket.on('startGame', async (gameInfo) => {
   waitingRoom.style.display = 'none';
   controls.style.display = 'block';
-  new GameStage3(socket, gameInfo.players, gameInfo.map);
+  const game = new GameStage3(socket, gameInfo.players, gameInfo.map);
+  await game.initGameStage();
 });
 
 socket.on('roomError', (message) => {
