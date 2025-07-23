@@ -1335,9 +1335,9 @@ export const object = (() => {
           });
         } else if (modelInfo.type === 'character') {
           characterLoader.load(gltf.scene, modelInfo, textureLoader);
-          });
+          };
         }
-      });
+      );
     }
 
     OnModelLoaded_(model, modelInfo, textureLoader) {

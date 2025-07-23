@@ -1,7 +1,1 @@
-fix: weapon_system.js의 'Weapon' 식별자 재선언 오류 해결
-
-- 문제: `public/weapon_system.js` 파일에서 'Uncaught SyntaxError: Identifier 'Weapon' has already been declared' 오류가 발생했습니다. 이는 게임 로직을 담당하는 `Weapon` 클래스와 3D 모델 로딩을 담당하는 `Weapon` 클래스(이전에는 `WeaponModel`로 불림) 간의 이름 충돌로 인한 것이었습니다.
-- 해결:
-    - 이름 충돌을 피하기 위해 3D 모델 로딩 클래스의 이름을 `Weapon3DModel`로 변경했습니다.
-    - `spawnWeaponOnMap` 함수가 3D 모델 로딩을 위해 게임 로직 `Weapon` 클래스 대신 `Weapon3DModel`을 올바르게 인스턴스화하도록 업데이트했습니다.
-- 영향: 이 수정으로 JavaScript 오류 없이 3D 무기 모델이 올바르게 로드되고 표시되어, 무기 동기화 로직이 의도한 대로 작동할 수 있게 되었습니다.
+syntax 에러 조치
