@@ -5,7 +5,7 @@ import { object } from './object.js';
 import { math } from './math.js';
 import { hp } from './hp.js'; // hp.js 임포트
 import { WEAPON_DATA, loadWeaponData, spawnWeaponOnMap, getRandomWeaponName } from './weapon.js';
-import { AttackSystem } from './attackSystem.js';
+// import { AttackSystem } from './attackSystem.js'; // AttackSystem 임포트 제거
 
 const socket = io();
 
@@ -47,7 +47,7 @@ export class GameStage1 {
     this.SetupLighting();
     this.SetupSkyAndFog();
     this.CreateGround();
-    this.attackSystem = new AttackSystem(this.scene); // AttackSystem 인스턴스 생성
+    // this.attackSystem = new AttackSystem(this.scene); // AttackSystem 인스턴스 생성 제거
     this.CreateLocalPlayer();
 
     
@@ -211,7 +211,7 @@ export class GameStage1 {
       nickname: localPlayerData.nickname, // 닉네임 추가
       hpUI: new hp.HPUI(this.scene, this.renderer, localPlayerData.nickname), // HPUI 인스턴스 생성 및 전달
       getRespawnPosition: () => this.getRandomPosition(),
-      attackSystem: this.attackSystem, // AttackSystem 인스턴스 전달
+      // attackSystem: this.attackSystem, // AttackSystem 인스턴스 전달 제거
       socket: this.socket, // socket 인스턴스 전달
       onLoad: () => {
         const initialPosition = this.getRandomPosition();
@@ -259,7 +259,7 @@ export class GameStage1 {
           isRemote: true,
           playerId: remotePlayerData.id, // playerId 추가
           hpUI: new hp.HPUI(this.scene, this.renderer, remotePlayerData.nickname), // 원격 플레이어 HPUI 생성
-          attackSystem: this.attackSystem, // AttackSystem 인스턴스 전달
+          // attackSystem: this.attackSystem, // AttackSystem 인스턴스 전달 제거
           socket: this.socket // socket 인스턴스 전달
         });
         this.players[data.playerId] = otherPlayer;
@@ -369,6 +369,12 @@ export class GameStage1 {
             targetPlayer.SetAnimation_('receievehit');
           }
         }
+      }
+    });
+
+    this.socket.on('remoteAnimationChange', (data) => {
+      if (this.players[data.playerId]) {
+        this.players[data.playerId].SetRemoteAnimation(data.anim);
       }
     });
   }
@@ -486,8 +492,8 @@ export class GameStage1 {
       this.npc_.Update(delta);
     }
 
-    // AttackSystem 업데이트
-    this.attackSystem.update(delta, Object.values(this.players), [this.npc_]);
+    // AttackSystem 업데이트 제거
+    // this.attackSystem.update(delta, Object.values(this.players), [this.npc_]);
 
     this.renderer.render(this.scene, this.camera);
   }
@@ -557,7 +563,7 @@ function updatePlayers(players, maxPlayers) {
           closeBtn.textContent = 'X';
           closeBtn.addEventListener('click', (e) => {
             e.stopPropagation(); // Prevent click from propagating to the slot itself
-            socket.emit('closePlayerSlot', i); // Send slot index
+            socket.emit('closePlayerSlot', i);
           });
           playerSlot.appendChild(closeBtn);
         }

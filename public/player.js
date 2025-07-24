@@ -13,9 +13,9 @@ export const player = (() => {
       this.nickname_ = params.nickname; // 닉네임 추가
       this.socket_ = params.socket; // socket 인스턴스 추가
       this.mesh_ = null;
-      this.mixer_ = null;
-      this.animations_ = {};
-      this.currentAction_ = null;
+      this.mixer_ = null; // MotionMixer 대신 기존 mixer_ 사용
+      this.animations_ = {}; // MotionMixer 대신 기존 animations_ 사용
+      this.currentAction_ = null; // MotionMixer 대신 기존 currentAction_ 사용
       this.currentAnimationName_ = 'Idle';
       this.keys_ = {
         forward: false,
@@ -54,7 +54,19 @@ export const player = (() => {
       this.equippedWeaponData_ = null; // 현재 장착된 무기 데이터
       this.originalWeaponRotation_ = null; // 무기 원래 회전 값 저장
       this.onAnimationFinished_ = null; // 애니메이션 종료 시 실행될 콜백
-      this.attackSystem_ = params.attackSystem; // AttackSystem 인스턴스
+      this.attackSystem_ = params.attackSystem; // AttackSystem 인스턴스 (기존 player.js에 있던 것)
+      this.comboActions_ = {}; // 콤보 애니메이션 저장용
+
+      this.boneGroups_ = {
+        lowerBody: [
+          'Hips', 'UpperLegL', 'LowerLegL', 'FootL',
+          'UpperLegR', 'LowerLegR', 'FootR'
+        ],
+        upperBody: [
+          'Abdomen', 'Torso', 'Neck', 'Head', 'ShoulderL', 'UpperArmL', 'LowerArmL', 'FistL',
+          'ShoulderR', 'UpperArmR', 'LowerArmR', 'FistR'
+        ]
+      };
 
       this.LoadModel_(params.character);
       if (!params.isRemote) {
@@ -73,7 +85,6 @@ export const player = (() => {
         this.overlay.style.alignItems = 'center';
         this.overlay.style.visibility = 'hidden';
 
-        // 오버레이 상단 문구
         this.overlayTopMsg = document.createElement('div');
         this.overlayTopMsg.innerText = 'Died';
         this.overlayTopMsg.style.position = 'absolute';
@@ -91,7 +102,6 @@ export const player = (() => {
         this.overlayTopMsg.style.animation = 'shake 0.5s infinite alternate';
         this.overlay.appendChild(this.overlayTopMsg);
 
-        // CSS 애니메이션(흔들림 효과) 추가
         const style = document.createElement('style');
         style.innerHTML = `
 @keyframes shake {
@@ -100,7 +110,6 @@ export const player = (() => {
 }`;
         document.head.appendChild(style);
 
-        // 오버레이 중앙 카운트다운
         this.overlayCountdown = document.createElement('div');
         this.overlayCountdown.innerText = '3';
         this.overlayCountdown.style.fontSize = '150px';
@@ -113,7 +122,6 @@ export const player = (() => {
 
         document.body.appendChild(this.overlay);
 
-        // 피격 효과 빨간 화면
         this.hitEffect = document.createElement('div');
         this.hitEffect.style.position = 'fixed';
         this.hitEffect.style.top = '0';
@@ -127,7 +135,7 @@ export const player = (() => {
         this.hitEffect.style.transition = 'opacity 0.1s ease-out';
         document.body.appendChild(this.hitEffect);
 
-        this.countdownTimer = null; // New variable
+        this.countdownTimer = null;
 
         this.InitInput_();
       }
@@ -230,14 +238,20 @@ export const player = (() => {
           break;
         case 'KeyJ':
           if (!this.isAttacking_ && !this.isJumping_ && !this.isRolling_ && this.attackCooldownTimer_ <= 0) {
+            const isMoving = this.keys_.forward || this.keys_.backward || this.keys_.left || this.keys_.right;
             let attackAnimation = 'SwordSlash'; // 기본값
-            // 무기 종류에 따라 애니메이션 선택
-            if (this.currentWeaponModel && this.currentWeaponModel.userData.weaponName) {
-              const weaponName = this.currentWeaponModel.userData.weaponName;
-              if (/Pistol|Shotgun|SniperRifle|AssaultRifle|Bow/i.test(weaponName)) {
-                attackAnimation = 'Shoot_OneHanded';
-              } else if (/Sword|Axe|Dagger|Hammer/i.test(weaponName)) {
-                attackAnimation = 'SwordSlash';
+
+            if (isMoving) {
+              attackAnimation = 'walkAttack';
+            } else {
+              // 무기 종류에 따라 애니메이션 선택 (멈춰있을 때만)
+              if (this.currentWeaponModel && this.currentWeaponModel.userData.weaponName) {
+                const weaponName = this.currentWeaponModel.userData.weaponName;
+                if (/Pistol|Shotgun|SniperRifle|AssaultRifle|Bow/i.test(weaponName)) {
+                  attackAnimation = 'Shoot_OneHanded';
+                } else if (/Sword|Axe|Dagger|Hammer/i.test(weaponName)) {
+                  attackAnimation = 'SwordSlash';
+                }
               }
             }
             this.PlayAttackAnimation(attackAnimation);
@@ -304,6 +318,9 @@ export const player = (() => {
           this.animations_[clip.name] = this.mixer_.clipAction(clip);
         }
         this.SetAnimation_('Idle');
+        
+        // 콤보 애니메이션 설정
+        this.setupComboAnim('walkAttack', 'Walk', 'SwordSlash');
 
         // HPUI에 플레이어 mesh와 headBone 연결
         if (this.hpUI) {
@@ -316,13 +333,54 @@ export const player = (() => {
       });
     }
 
+    filterTracks(originalClip, allowedBoneNames) {
+      const filteredTracks = [];
+      originalClip.tracks.forEach(track => {
+        const trackNameParts = track.name.split('.');
+        const boneName = trackNameParts[0];
+        if (allowedBoneNames.includes(boneName)) {
+          filteredTracks.push(track);
+        }
+      });
+      return new THREE.AnimationClip(originalClip.name, originalClip.duration, filteredTracks);
+    }
+
+    setupComboAnim(comboName, lowerBodyAnimName, upperBodyAnimName) {
+      const lowerClip = this.animations_[lowerBodyAnimName].getClip();
+      const upperClip = this.animations_[upperBodyAnimName].getClip();
+
+      const lowerFilteredClip = this.filterTracks(lowerClip, this.boneGroups_.lowerBody);
+      const upperFilteredClip = this.filterTracks(upperClip, this.boneGroups_.upperBody);
+
+      this.comboActions_[comboName] = {
+        lower: this.mixer_.clipAction(lowerFilteredClip),
+        upper: this.mixer_.clipAction(upperFilteredClip)
+      };
+    }
+
     SetAnimation_(name) {
       if (this.currentAnimationName_ === name) return;
+
+      // 콤보 액션 중지 처리
+      if (this.currentAction_ && this.currentAction_.combo) {
+        this.currentAction_.lower.fadeOut(0.3);
+        this.currentAction_.upper.fadeOut(0.3);
+      } else if (this.currentAction_) {
+        this.currentAction_.fadeOut(0.3);
+      }
+
+      // 콤보 애니메이션 재생
+      if (this.comboActions_[name]) {
+        const combo = this.comboActions_[name];
+        combo.lower.reset().fadeIn(0.3).play();
+        combo.upper.reset().fadeIn(0.3).play();
+        this.currentAction_ = { ...combo, combo: true };
+        this.currentAnimationName_ = name;
+        return;
+      }
+
       if (name === 'Death') { // Death 애니메이션은 항상 재생
         this.currentAnimationName_ = name;
-        if (this.currentAction_) {
-          this.currentAction_.fadeOut(0.3);
-        }
         const newAction = this.animations_[name];
         if (newAction) {
           this.currentAction_ = newAction;
@@ -340,13 +398,9 @@ export const player = (() => {
         return;
       }
       if (this.isDead_) return; // 죽은 상태에서는 Death 애니메이션 외 다른 애니메이션 재생 방지
-      if (this.isAttacking_ && name !== 'SwordSlash' && name !== 'Shoot_OneHanded') return; // 공격 중에는 다른 애니메이션 재생 방지
+      if (this.isAttacking_ && name !== 'SwordSlash' && name !== 'Shoot_OneHanded' && name !== 'walkAttack') return; // 공격 중에는 다른 애니메이션 재생 방지
 
       this.currentAnimationName_ = name;
-      if (this.currentAction_) {
-        this.currentAction_.fadeOut(0.3);
-      }
-
       const newAction = this.animations_[name];
       if (newAction) {
         this.currentAction_ = newAction;
@@ -374,6 +428,11 @@ export const player = (() => {
           this.currentAction_.reset().fadeIn(0.3).play();
         }
         this.currentAnimationName_ = 'Idle'; // Update current animation name to Idle
+      }
+
+      // [멀티플레이 동기화] 로컬 플레이어의 애니메이션 변경을 서버로 전송
+      if (!this.params_.isRemote && this.socket_) {
+        this.socket_.emit('animationChange', { anim: this.currentAnimationName_ });
       }
     }
 
@@ -448,15 +507,6 @@ export const player = (() => {
       }
     }
 
-    UpdateDebugVisuals() {
-      if (this.boundingBoxHelper_) {
-        this.boundingBoxHelper_.visible = this.keys_.debug;
-      }
-      if (this.params_.onDebugToggle) {
-        this.params_.onDebugToggle(this.keys_.debug);
-      }
-    }
-
     PlayAttackAnimation(animationName) {
       if (this.isDead_) return; // 죽은 상태에서는 공격 불가
       if (this.isAttacking_) return; // 이미 공격 중이면 무시
@@ -466,7 +516,7 @@ export const player = (() => {
       this.SetAnimation_(animationName);
 
       // 애니메이션 종료 시점 처리
-      const action = this.animations_[animationName];
+      const action = this.animations_[animationName] || (this.comboActions_[animationName] ? this.comboActions_[animationName].upper : null);
       if (action) {
         action.reset();
         action.setLoop(THREE.LoopOnce);
@@ -477,7 +527,7 @@ export const player = (() => {
         // 예: SwordSlash 애니메이션의 0.2초 지점에서 공격 판정
         if (this.attackSystem_) {
           const attackDelay = 0.2; // 공격 판정 발생까지의 딜레이 (초)
-          setTimeout(() => {
+          this.attackTimeoutId_ = setTimeout(() => {
             if (!this.isAttacking_) return; // 공격이 취소되었으면 실행하지 않음
 
             let weapon = this.equippedWeaponData_; // 현재 장착된 무기 데이터
@@ -549,7 +599,7 @@ export const player = (() => {
         }
 
         // SwordSlash 애니메이션 시작 시 무기 회전 초기화
-        if (animationName === 'SwordSlash' && this.currentWeaponModel) {
+        if ((animationName === 'SwordSlash' || animationName === 'walkAttack') && this.currentWeaponModel) {
           const weaponName = this.currentWeaponModel.userData.weaponName;
           if (/Sword|Axe|Dagger|Hammer/i.test(weaponName)) {
             this.originalWeaponRotation_ = this.currentWeaponModel.rotation.clone();
@@ -572,7 +622,7 @@ export const player = (() => {
             this.SetAnimation_(isMoving ? (isRunning ? 'Run' : 'Walk') : 'Idle');
 
             // SwordSlash 애니메이션 종료 시 무기 회전 복원
-            if (animationName === 'SwordSlash' && this.currentWeaponModel && this.originalWeaponRotation_) {
+            if ((animationName === 'SwordSlash' || animationName === 'walkAttack') && this.currentWeaponModel && this.originalWeaponRotation_) {
               this.currentWeaponModel.rotation.copy(this.originalWeaponRotation_);
               this.originalWeaponRotation_ = null; // 초기화
             }
@@ -608,7 +658,6 @@ export const player = (() => {
       loader.load(weaponName, (fbx) => {
         // 새로운 무기가 로드되기 직전에 이전 무기를 확실히 제거
         this.UnequipWeapon(); 
-
         const weaponModel = fbx;
 
         // KDTgames-main/item.js의 스케일 로직 참고
@@ -679,12 +728,8 @@ export const player = (() => {
         if (this.rollCooldownTimer_ < 0) this.rollCooldownTimer_ = 0;
       }
 
-      if (this.attackCooldownTimer_ > 0) {
-        this.attackCooldownTimer_ -= timeElapsed;
-        if (this.attackCooldownTimer_ < 0) this.attackCooldownTimer_ = 0;
+      if (this.attackCooldownTimer_ < 0) this.attackCooldownTimer_ = 0;
       }
-
-      
 
       let newPosition = this.position_.clone();
       let velocity = new THREE.Vector3();
@@ -944,8 +989,6 @@ export const player = (() => {
       if (this.hpUI) {
         this.hpUI.updatePosition();
       }
-
-      
     }
   }
 

@@ -1,0 +1,41 @@
+논리 요약:
+
+`walkAttack` 애니메이션은 Three.js의 애니메이션 레이어링(Animation Layering) 또는 마스킹(Masking) 기법을 사용하여 'Walk' 애니메이션의 하체 움직임과 'SwordSlash' 애니메이션의 상체 움직임을 조합하여 생성되었습니다. 이 과정은 `MotionMixer.js`라는 커스텀 클래스를 통해 구현되었습니다.
+
+주요 논리 단계:
+
+1.  **뼈대 정의 (`boneDefs`):**
+    *   `MotionMixer.js` 내부에 `boneDefs`라는 객체를 정의하여 캐릭터의 뼈들을 `lowerBody`와 `upperBody`로 명확하게 구분했습니다.
+    *   `lowerBody`에는 `Hips`, `UpperLegL`, `LowerLegL`, `FootL`, `UpperLegR`, `LowerLegR`, `FootR` (그리고 머리 움직임을 걷는 모션에 맞추기 위해 `Head`도 포함) 뼈들이 포함됩니다.
+    *   `upperBody`에는 `Abdomen`, `Torso`, `Neck`, `ShoulderL`, `UpperArmL`, `LowerArmL`, `FistL`, `ShoulderR`, `UpperArmR`, `LowerArmR`, `FistR` 뼈들이 포함됩니다.
+    *   이 뼈 이름들은 Three.js에 로드된 실제 모델의 뼈 이름과 정확히 일치하도록 여러 차례 디버깅을 통해 확인하고 수정했습니다.
+
+2.  **애니메이션 트랙 필터링 (`_filterTracks`):**
+    *   `MotionMixer` 클래스 내부에 `_filterTracks`라는 헬퍼 함수를 구현했습니다.
+    *   이 함수는 원본 `THREE.AnimationClip`과 허용할 뼈 이름 목록(`allowedBoneNames`)을 인자로 받습니다.
+    *   원본 클립의 모든 애니메이션 트랙(각 뼈의 위치, 회전, 스케일 키프레임 데이터)을 순회하면서, `allowedBoneNames`에 포함된 뼈에 해당하는 트랙만 추출하여 새로운 `AnimationClip`을 생성합니다.
+    *   이를 통해 특정 뼈 그룹에만 애니메이션의 영향을 제한하는 "마스킹" 효과를 얻습니다.
+
+3.  **복합 애니메이션 생성 (`createCompositeAction`):**
+    *   `createCompositeAction(newActionName, lowerBodyActionName, upperBodyActionName)` 메서드가 `walkAttack`과 같은 복합 애니메이션을 생성하는 핵심입니다.
+    *   `walkAttack`의 경우:
+        *   `lowerBodyActionName`으로 지정된 'Walk' 애니메이션 클립을 가져옵니다.
+        *   이 'Walk' 클립을 `_filterTracks` 함수에 `lowerBody` 뼈 목록과 함께 전달하여, 하체 움직임만 포함하는 `walkAttack_lower`라는 새로운 `AnimationClip`을 만듭니다.
+        *   `upperBodyActionName`으로 지정된 'SwordSlash' 애니메이션 클립을 가져옵니다.
+        *   이 'SwordSlash' 클립을 `_filterTracks` 함수에 `upperBody` 뼈 목록과 함께 전달하여, 상체 움직임만 포함하는 `walkAttack_upper`라는 새로운 `AnimationClip`을 만듭니다.
+        *   `walkAttack_lower`와 `walkAttack_upper` 각각에 대해 `THREE.AnimationAction` 인스턴스를 생성합니다.
+        *   이 두 개의 `AnimationAction`은 `walkAttack`이라는 이름의 "복합 액션"으로 `MotionMixer` 내부에 저장됩니다.
+
+4.  **애니메이션 재생 및 전환 (`play`):**
+    *   `MotionMixer`의 `play(actionName, fadeDuration)` 메서드는 요청된 `actionName`이 일반 애니메이션인지 `isComposite` (복합) 애니메이션인지 확인합니다.
+    *   `walkAttack`과 같은 복합 애니메이션이 요청되면, `play` 메서드는 내부에 저장된 `walkAttack_lower` 액션과 `walkAttack_upper` 액션을 **동시에 재생**합니다.
+    *   애니메이션 전환 시에는 `crossFadeTo` 메서드를 사용하여 이전 애니메이션에서 새 애니메이션으로 부드럽게 전환되도록 처리하며, 복합 애니메이션의 경우 하체와 상체 액션을 개별적으로 페이드 처리합니다.
+
+5.  **`player.js`와의 통합:**
+    *   `Player` 클래스는 더 이상 `THREE.AnimationMixer`를 직접 관리하지 않고, `MotionMixer` 인스턴스(`this.motionMixer_`)를 사용합니다.
+    *   모델 로딩 시 `this.motionMixer_ = new MotionMixer(model, gltf.animations);`를 통해 `MotionMixer`를 초기화하고, `this.motionMixer_.createCompositeAction('walkAttack', 'Walk', 'SwordSlash');`를 호출하여 복합 애니메이션을 정의합니다.
+    *   `SetAnimation_` 메서드는 `this.motionMixer_.play(name, 0.3);`를 호출하여 애니메이션 재생을 `MotionMixer`에 위임합니다.
+    *   `Update` 메서드는 `this.motionMixer_.update(timeElapsed);`를 호출하여 애니메이션을 업데이트합니다.
+    *   플레이어가 걷는 상태에서 공격 키('J')를 누르면, `SetAnimation_('walkAttack')`이 호출되어 하체는 걷고 상체는 칼을 휘두르는 모션이 재생됩니다.
+
+이러한 논리를 통해, 블렌더에서 의도한 대로 'Walk'와 'SwordSlash' 애니메이션의 특정 부분을 조합하여 'walkAttack'이라는 새로운 복합 애니메이션을 웹 게임 내에서 구현할 수 있었습니다.

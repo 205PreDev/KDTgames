@@ -282,7 +282,14 @@ io.on('connection', (socket) => {
       }
     }
   });
-
+  socket.on('animationChange', (data) => {
+      if (socket.roomId && rooms[socket.roomId]) {
+        socket.to(socket.roomId).emit('remoteAnimationChange', {
+          playerId: socket.id,
+          anim: data.anim
+        });
+      }
+  });
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
     if (socket.roomId && rooms[socket.roomId]) {
