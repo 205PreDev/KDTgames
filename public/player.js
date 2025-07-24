@@ -729,7 +729,6 @@ export const player = (() => {
       }
 
       if (this.attackCooldownTimer_ < 0) this.attackCooldownTimer_ = 0;
-      }
 
       let newPosition = this.position_.clone();
       let velocity = new THREE.Vector3();
