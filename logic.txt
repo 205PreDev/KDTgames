@@ -1,129 +1,41 @@
-# ✅ **근접 / 원거리 전투 시스템 개선 및 몰입감 향상 작업 계획**
+논리 요약:
 
----
+`walkAttack` 애니메이션은 Three.js의 애니메이션 레이어링(Animation Layering) 또는 마스킹(Masking) 기법을 사용하여 'Walk' 애니메이션의 하체 움직임과 'SwordSlash' 애니메이션의 상체 움직임을 조합하여 생성되었습니다. 이 과정은 `MotionMixer.js`라는 커스텀 클래스를 통해 구현되었습니다.
 
-## 📌 **1. 시스템 분석 및 환경 정비**
+주요 논리 단계:
 
-**목표:** 코드 구조를 파악하고 리소스 폴더 및 개발 환경을 준비합니다.
+1.  **뼈대 정의 (`boneDefs`):**
+    *   `MotionMixer.js` 내부에 `boneDefs`라는 객체를 정의하여 캐릭터의 뼈들을 `lowerBody`와 `upperBody`로 명확하게 구분했습니다.
+    *   `lowerBody`에는 `Hips`, `UpperLegL`, `LowerLegL`, `FootL`, `UpperLegR`, `LowerLegR`, `FootR` (그리고 머리 움직임을 걷는 모션에 맞추기 위해 `Head`도 포함) 뼈들이 포함됩니다.
+    *   `upperBody`에는 `Abdomen`, `Torso`, `Neck`, `ShoulderL`, `UpperArmL`, `LowerArmL`, `FistL`, `ShoulderR`, `UpperArmR`, `LowerArmR`, `FistR` 뼈들이 포함됩니다.
+    *   이 뼈 이름들은 Three.js에 로드된 실제 모델의 뼈 이름과 정확히 일치하도록 여러 차례 디버깅을 통해 확인하고 수정했습니다.
 
-* **기능 분석**
+2.  **애니메이션 트랙 필터링 (`_filterTracks`):**
+    *   `MotionMixer` 클래스 내부에 `_filterTracks`라는 헬퍼 함수를 구현했습니다.
+    *   이 함수는 원본 `THREE.AnimationClip`과 허용할 뼈 이름 목록(`allowedBoneNames`)을 인자로 받습니다.
+    *   원본 클립의 모든 애니메이션 트랙(각 뼈의 위치, 회전, 스케일 키프레임 데이터)을 순회하면서, `allowedBoneNames`에 포함된 뼈에 해당하는 트랙만 추출하여 새로운 `AnimationClip`을 생성합니다.
+    *   이를 통해 특정 뼈 그룹에만 애니메이션의 영향을 제한하는 "마스킹" 효과를 얻습니다.
 
-  * `player.js`, `attackSystem.js`, `weaponSystem.js`, `collider.js`, `main.js` 코드 흐름 파악
-  * 이동, 공격, 충돌, 무기 관리, 게임 루프 동작 방식 확인
-* **리소스 구조 통일**
+3.  **복합 애니메이션 생성 (`createCompositeAction`):**
+    *   `createCompositeAction(newActionName, lowerBodyActionName, upperBodyActionName)` 메서드가 `walkAttack`과 같은 복합 애니메이션을 생성하는 핵심입니다.
+    *   `walkAttack`의 경우:
+        *   `lowerBodyActionName`으로 지정된 'Walk' 애니메이션 클립을 가져옵니다.
+        *   이 'Walk' 클립을 `_filterTracks` 함수에 `lowerBody` 뼈 목록과 함께 전달하여, 하체 움직임만 포함하는 `walkAttack_lower`라는 새로운 `AnimationClip`을 만듭니다.
+        *   `upperBodyActionName`으로 지정된 'SwordSlash' 애니메이션 클립을 가져옵니다.
+        *   이 'SwordSlash' 클립을 `_filterTracks` 함수에 `upperBody` 뼈 목록과 함께 전달하여, 상체 움직임만 포함하는 `walkAttack_upper`라는 새로운 `AnimationClip`을 만듭니다.
+        *   `walkAttack_lower`와 `walkAttack_upper` 각각에 대해 `THREE.AnimationAction` 인스턴스를 생성합니다.
+        *   이 두 개의 `AnimationAction`은 `walkAttack`이라는 이름의 "복합 액션"으로 `MotionMixer` 내부에 저장됩니다.
 
-  * `resources/audio/` : 사운드 저장
-  * `resources/effects/` : 시각 이펙트 리소스 저장
-* **디렉터리 재구성**
+4.  **애니메이션 재생 및 전환 (`play`):**
+    *   `MotionMixer`의 `play(actionName, fadeDuration)` 메서드는 요청된 `actionName`이 일반 애니메이션인지 `isComposite` (복합) 애니메이션인지 확인합니다.
+    *   `walkAttack`과 같은 복합 애니메이션이 요청되면, `play` 메서드는 내부에 저장된 `walkAttack_lower` 액션과 `walkAttack_upper` 액션을 **동시에 재생**합니다.
+    *   애니메이션 전환 시에는 `crossFadeTo` 메서드를 사용하여 이전 애니메이션에서 새 애니메이션으로 부드럽게 전환되도록 처리하며, 복합 애니메이션의 경우 하체와 상체 액션을 개별적으로 페이드 처리합니다.
 
-  * 공격 시스템 및 무기 관리 코드 분리
-  * 모듈화 및 코드 가독성 확보
+5.  **`player.js`와의 통합:**
+    *   `Player` 클래스는 더 이상 `THREE.AnimationMixer`를 직접 관리하지 않고, `MotionMixer` 인스턴스(`this.motionMixer_`)를 사용합니다.
+    *   모델 로딩 시 `this.motionMixer_ = new MotionMixer(model, gltf.animations);`를 통해 `MotionMixer`를 초기화하고, `this.motionMixer_.createCompositeAction('walkAttack', 'Walk', 'SwordSlash');`를 호출하여 복합 애니메이션을 정의합니다.
+    *   `SetAnimation_` 메서드는 `this.motionMixer_.play(name, 0.3);`를 호출하여 애니메이션 재생을 `MotionMixer`에 위임합니다.
+    *   `Update` 메서드는 `this.motionMixer_.update(timeElapsed);`를 호출하여 애니메이션을 업데이트합니다.
+    *   플레이어가 걷는 상태에서 공격 키('J')를 누르면, `SetAnimation_('walkAttack')`이 호출되어 하체는 걷고 상체는 칼을 휘두르는 모션이 재생됩니다.
 
-**작업 예시:**
-
-```plaintext
-/public/
- ├── core/         # 엔진
- ├── player/       # 캐릭터
- ├── combat/       # 공격, 무기
- ├── ui/           # 사용자 인터페이스
- ├── resources/    # 오디오 및 이펙트
-```
-
----
-
-## 📌 **2. 전투 시스템 안정화**
-
-**목표:** 근본적인 전투 시스템 신뢰성 확보 후 확장 준비.
-
-### 2.1 근접 공격 판정 (부채꼴)
-
-* 시야각/거리 기반 부채꼴 판정 함수 최적화
-* 타격 타이밍에 맞춰 `attackSystem.triggerMeleeAttack()` 호출
-* 디버그 모드에서 공격 판정 시각화
-
-### 2.2 원거리 공격 판정 (구체형 투사체)
-
-* 무기 속성에 따라 투사체 속도, 사거리 분기 처리
-* 투사체 재사용 풀링 적용 (생성/제거 반복 최소화)
-* 각 무기마다 탄속 / 크기 / 효과 차별화
-
-### 2.3 무기 소환 제한
-
-* `spawnedWeaponCount`로 총량 관리
-* lifetime 대신 무기 풀링 및 재사용 방식 적용
-* 무기 소환/수거 시 개수 관리 로직 추가
-
-### 2.4 플레이어 충돌 처리
-
-* 충돌 시 이동 벡터 보정 및 밀어내기 처리
-* 서로 관통 방지
-
----
-
-## 📌 **3. 사운드 시스템 구축**
-`
-**목표:** 전투 및 이동 피드백을 사운드로 제공하여 몰입도 향상.
-
-* 공통 사운드 매니저 (`soundManager.js`) 개발
-* 사운드 로드 및 캐싱, 재생 컨트롤 함수 구현
-* 공격/피격/발사/점프/착지/사망 등 주요 이벤트에 삽입
-
----
-
-## 📌 **4. 시각 효과 및 피드백 강화**
-
-**목표:** 시각적 피드백 제공 및 액션 몰입감 개선.
-
-* **공격 이펙트:** 휘두름 궤적, 총구 화염, 피격 스파크 등
-* **파티클 시스템:** Three.js 기반 환경 파티클 배경 처리
-* **피격 리액션:** 적 넉백/경직 등 반응 애니메이션 적용
-
----
-
-+) 필요 조치
-1. 이동 중 공격은 가능하지만, 공격 중 이동 시 공격을 중단하고 이동
-2. 총 사격 시 총염 이펙트에 과부하가 있는 것으로 보임 << 즉 게임에 렉걸림
-3. 총 투사체를 구체에서 폭 0.5의 직사각형으로 변경
-4. 근접 무기의 휘두르는 궤적 표시 << 어려울 것으로 봄
-
-## 📌 **5. 테스트 및 최적화**
-
-**목표:** 시스템 안정성 검증 및 성능 최적화.
-
-* 근접/원거리 공격 판정 테스트
-* 사운드 동작 검증
-* 시각 효과 출력 확인
-* 충돌 및 무기 제한 로직 검증
-* 성능 모니터링 후 필요 시 최적화
-
----
-
-# 📋 **최종 작업 순서 (우선순위 기반)**
-
-1️⃣ 전투 시스템 안정화
-2️⃣ 무기 소환 제한 및 관리 최적화
-3️⃣ 플레이어 충돌 처리
-4️⃣ 사운드 시스템 적용
-5️⃣ 시각 효과 및 피드백 강화
-6️⃣ 테스트 및 디버깅
-7️⃣ 폴더 구조 재편 및 코드 모듈화 (병행 추천)
-
----
-
-# 🎯 **최종 목표**
-
-* 신뢰성 있는 전투 시스템 구축
-* 플레이어 체감 피드백 강화
-* 코드 유지보수성 확보 및 확장 준비
-
----
-
-## 💡 **추가 고려사항**
-
-*   **멀티플레이어 환경 전환 (Socket.IO):** 향후 멀티플레이어 환경으로의 전환을 위해 Socket.IO와 같은 웹소켓 라이브러리 도입을 고려한다. 서버-클라이언트 통신, 게임 상태 동기화, 서버 권한 부여(Server Authoritative) 방식, 네트워크 지연 처리 등 멀티플레이어 아키텍처에 대한 이해와 준비가 필요하다. 이는 게임의 핵심 아키텍처에 큰 변화를 가져오므로, 초기 설계 단계부터 염두에 두는 것이 좋다.
-*   **모듈 개발용 임시 폴더 활용:** 기존 코드의 안정성을 유지하면서 모듈화 작업을 진행하기 위해, 별도의 임시 개발 폴더(예: `public/dev_modules/` 또는 `src/`)를 생성하여 개선된 모듈들을 개발하고 테스트한다. 개발이 완료되고 안정성이 확보되면 기존 코드와 통합하거나 대체하는 방식으로 진행한다.
-
----
-
-
+이러한 논리를 통해, 블렌더에서 의도한 대로 'Walk'와 'SwordSlash' 애니메이션의 특정 부분을 조합하여 'walkAttack'이라는 새로운 복합 애니메이션을 웹 게임 내에서 구현할 수 있었습니다.
