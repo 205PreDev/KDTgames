@@ -17,7 +17,7 @@
     "url": "https://github.com/kimkichan-1/kdt-game/issues"
   },
   "homepage": "https://github.com/kimkichan-1/kdt-game#readme",
-  "description": "Integrated multiplayer game with advanced features",
+  "description": "",
   "dependencies": {
     "express": "^5.1.0",
     "socket.io": "^4.7.5"

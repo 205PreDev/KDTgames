@@ -2,31 +2,7 @@ const express = require('express');
 const path = require('path');
 const http = require('http');
 const { Server } = require('socket.io');
-
-const fs = require('fs');
-
-let WEAPON_DATA = {};
-
-async function loadWeaponData() {
-    try {
-        const dataPath = path.join(__dirname, 'public', 'resources', 'data', 'weapon_data.json');
-        const data = await fs.promises.readFile(dataPath, 'utf8');
-        WEAPON_DATA = JSON.parse(data);
-        console.log('Server: Weapon data loaded successfully.');
-    } catch (error) {
-        console.error('Server: Failed to load weapon data:', error);
-    }
-}
-
-function getRandomWeaponName() {
-    const weaponNames = Object.keys(WEAPON_DATA).filter(name => name !== 'Potion1_Filled.fbx');
-    if (weaponNames.length === 0) {
-        console.warn("Server: No weapons available to spawn (excluding Potion1_Filled.fbx).");
-        return null;
-    }
-    const randomIndex = Math.floor(Math.random() * weaponNames.length);
-    return weaponNames[randomIndex];
-}
+const { getRandomWeaponName } = require('./weaponUtils');
 
 const app = express();
 const server = http.createServer(app);
@@ -49,7 +25,7 @@ function updateRoomPlayers(roomId) {
   }
 }
 
-// 정적 파일 서빙을 위한 디렉토리 설정 - 경로 업데이트됨
+// 정적 파일 서빙을 위한 디렉토리 설정
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/', (req, res) => {
@@ -77,7 +53,7 @@ io.on('connection', (socket) => {
 
     rooms[roomId] = {
       id: roomId,
-      players: [{ id: socket.id, ready: false, nickname: nickname, character: character }], // Store nickname and character
+      players: [{ id: socket.id, ready: false, nickname: nickname, character: character, equippedWeapon: null, isAttacking: false, hp: 100 }], // Store nickname, character, equippedWeapon, attacking state, and HP
       gameState: {},
       map: map,
       maxPlayers: maxPlayers,
@@ -116,7 +92,7 @@ io.on('connection', (socket) => {
         return;
       }
       socket.join(roomId);
-      rooms[roomId].players.push({ id: socket.id, ready: false, nickname: nickname, character: character }); // Store nickname and character
+      rooms[roomId].players.push({ id: socket.id, ready: false, nickname: nickname, character: character, equippedWeapon: null, isAttacking: false, hp: 100 }); // Store nickname, character, equippedWeapon, attacking state, and HP
       socket.roomId = roomId;
       console.log(`${socket.id} joined room: ${roomId}`);
       socket.emit('roomJoined', { id: roomId, name: rooms[roomId].name, map: rooms[roomId].map });
@@ -131,6 +107,7 @@ io.on('connection', (socket) => {
       const playerIndex = rooms[socket.roomId].players.findIndex(p => p.id === socket.id);
       if (playerIndex !== -1) {
         rooms[socket.roomId].players[playerIndex].ready = !rooms[socket.roomId].players[playerIndex].ready;
+        // rooms[socket.roomId].players[playerIndex].character = character; // Remove this line
         updateRoomPlayers(socket.roomId);
 
         // Check if all players are ready
@@ -148,87 +125,15 @@ io.on('connection', (socket) => {
 
   socket.on('gameUpdate', (data) => {
     if (socket.roomId && rooms[socket.roomId]) {
-      // 고급 게임 시스템 데이터 처리
-      if (data.type) {
-        switch (data.type) {
-          case 'playerState':
-            // 플레이어 상태 업데이트 처리
-            if (data.data && data.data.id) {
-              // 플레이어 ID 확인 및 검증
-              if (data.data.id === socket.id) {
-                // 유효한 플레이어 상태 업데이트만 브로드캐스트
-                socket.to(socket.roomId).emit('gameUpdate', data);
-              }
-            }
-            break;
-            
-          case 'weaponAttack':
-            // 무기 공격 이벤트 처리
-            if (data.data && data.data.playerId === socket.id) {
-              // 공격 데이터 검증 및 브로드캐스트
-              socket.to(socket.roomId).emit('gameUpdate', data);
-            }
-            break;
-            
-          case 'projectile':
-            // 투사체 이벤트 처리
-            if (data.data && data.data.playerId === socket.id) {
-              // 투사체 데이터 검증 및 브로드캐스트
-              socket.to(socket.roomId).emit('gameUpdate', data);
-            }
-            break;
-            
-          case 'effect':
-            // 이펙트 이벤트 처리
-            socket.to(socket.roomId).emit('gameUpdate', data);
-            break;
-            
-          case 'itemPickup':
-            // 아이템 획득 이벤트 처리
-            if (data.data && (data.data.playerId === socket.id || data.data.type === 'spawn')) {
-              // 아이템 획득 데이터 검증 및 브로드캐스트
-              socket.to(socket.roomId).emit('gameUpdate', data);
-              
-              // 아이템 상태 저장 (필요시)
-              if (!rooms[socket.roomId].gameState.items) {
-                rooms[socket.roomId].gameState.items = [];
-              }
-              
-              if (data.data.type === 'spawn') {
-                // 아이템 생성 이벤트 처리
-                rooms[socket.roomId].gameState.items.push({
-                  id: data.data.itemId,
-                  name: data.data.itemName,
-                  position: data.data.position,
-                  available: true
-                });
-              } else if (data.data.type === 'pickup') {
-                // 아이템 획득 이벤트 처리
-                const item = rooms[socket.roomId].gameState.items.find(i => i.id === data.data.itemId);
-                if (item) {
-                  item.available = false;
-                  item.ownerId = data.data.playerId;
-                }
-              }
-            }
-            break;
-            
-          case 'damage':
-            // 데미지 이벤트 처리
-            if (data.data && data.data.attackerId === socket.id) {
-              // 데미지 데이터 검증 및 브로드캐스트
-              socket.to(socket.roomId).emit('gameUpdate', data);
-            }
-            break;
-            
-          default:
-            // 기타 게임 업데이트 브로드캐스트
-            socket.to(socket.roomId).emit('gameUpdate', data);
-        }
-      } else {
-        // 기존 방식의 게임 업데이트 처리 (하위 호환성 유지)
-        socket.to(socket.roomId).emit('gameUpdate', data);
+      // Update player's equipped weapon in gameState
+      const playerInRoom = rooms[socket.roomId].players.find(p => p.id === socket.id);
+      if (playerInRoom) {
+        playerInRoom.equippedWeapon = data.equippedWeapon; // Store equipped weapon
+        playerInRoom.isAttacking = data.isAttacking; // Store attacking state
+        playerInRoom.hp = data.hp; // Store HP
       }
+      // Broadcast game updates to all other clients in the same room
+      socket.to(socket.roomId).emit('gameUpdate', data);
     }
   });
 
@@ -242,7 +147,23 @@ io.on('connection', (socket) => {
         const allReady = room.players.every(p => p.ready);
         if (allReady && room.players.length > 0) {
           room.status = 'playing'; // Change room status to playing
-          io.to(socket.roomId).emit('startGame', { players: room.players, map: room.map });
+
+          // Generate random weapon positions and names
+          const spawnedWeapons = [];
+          for (let i = 0; i < 10; i++) {
+            const weaponName = getRandomWeaponName();
+            if (weaponName) {
+              const uuid = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15); // Simple unique ID
+              // Generate random positions within a reasonable range for the map
+              const x = Math.random() * 80 - 40; // 맵 범위 (-40 ~ 40)
+              const y = 1; // 무기 스폰 높이 (1만큼 높임)
+              const z = Math.random() * 80 - 40; // 맵 범위 (-40 ~ 40)
+              spawnedWeapons.push({ uuid, weaponName, x, y, z });
+            }
+          }
+          room.gameState.spawnedWeapons = spawnedWeapons; // Store in gameState
+
+          io.to(socket.roomId).emit('startGame', { players: room.players, map: room.map, spawnedWeapons: spawnedWeapons });
         } else {
           socket.emit('roomError', '모든 플레이어가 준비되지 않았습니다.');
         }
@@ -296,6 +217,79 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('weaponPickedUp', (weaponUuid) => {
+    if (socket.roomId && rooms[socket.roomId]) {
+      let spawnedWeapons = rooms[socket.roomId].gameState.spawnedWeapons;
+      if (spawnedWeapons) {
+        // Remove the picked up weapon from the server's game state
+        rooms[socket.roomId].gameState.spawnedWeapons = spawnedWeapons.filter(weapon => weapon.uuid !== weaponUuid);
+        // Broadcast to all clients in the room that this weapon was picked up
+        io.to(socket.roomId).emit('weaponPickedUp', weaponUuid);
+      }
+    }
+  });
+
+  socket.on('weaponSpawned', (weaponData) => {
+    if (socket.roomId && rooms[socket.roomId]) {
+      let spawnedWeapons = rooms[socket.roomId].gameState.spawnedWeapons;
+      if (spawnedWeapons) {
+        spawnedWeapons.push(weaponData);
+        io.to(socket.roomId).emit('weaponSpawned', weaponData);
+      }
+    }
+  });
+
+  socket.on('weaponEquipped', (weaponName) => {
+    if (socket.roomId && rooms[socket.roomId]) {
+      const playerInRoom = rooms[socket.roomId].players.find(p => p.id === socket.id);
+      if (playerInRoom) {
+        playerInRoom.equippedWeapon = weaponName; // Store equipped weapon
+        // Broadcast to all other clients in the room that this player equipped a weapon
+        socket.to(socket.roomId).emit('playerEquippedWeapon', { playerId: socket.id, weaponName: weaponName });
+      }
+    }
+  });
+
+  socket.on('playerAttack', (animationName) => {
+    if (socket.roomId && rooms[socket.roomId]) {
+      // Broadcast to all other clients in the room that this player attacked
+      socket.to(socket.roomId).emit('playerAttack', { playerId: socket.id, animationName: animationName });
+    }
+  });
+
+  socket.on('playerDamage', (data) => {
+    console.log(`[Server] Received playerDamage: targetId=${data.targetId}, damage=${data.damage}`);
+    if (socket.roomId && rooms[socket.roomId]) {
+      const room = rooms[socket.roomId];
+      const targetPlayer = room.players.find(p => p.id === data.targetId);
+      if (targetPlayer) {
+        console.log(`[Server] Target player found: ${targetPlayer.nickname} (HP: ${targetPlayer.hp})`);
+        targetPlayer.hp -= data.damage;
+        if (targetPlayer.hp < 0) targetPlayer.hp = 0;
+        console.log(`[Server] ${targetPlayer.nickname} new HP: ${targetPlayer.hp}`);
+
+        // 모든 클라이언트에게 HP 업데이트 브로드캐스트
+        io.to(socket.roomId).emit('hpUpdate', { playerId: targetPlayer.id, hp: targetPlayer.hp });
+        console.log(`[Server] Emitted hpUpdate: playerId=${targetPlayer.id}, hp=${targetPlayer.hp}`);
+
+        if (targetPlayer.hp === 0) {
+          // 사망 처리 (필요하다면 추가 로직)
+          console.log(`${targetPlayer.nickname} (${targetPlayer.id}) has been defeated!`);
+          // 리스폰 로직은 클라이언트에서 처리
+        }
+      } else {
+        console.log(`[Server] Target player ${data.targetId} not found in room ${socket.roomId}`);
+      }
+    }
+  });
+  socket.on('animationChange', (data) => {
+      if (socket.roomId && rooms[socket.roomId]) {
+        socket.to(socket.roomId).emit('remoteAnimationChange', {
+          playerId: socket.id,
+          anim: data.anim
+        });
+      }
+  });
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
     if (socket.roomId && rooms[socket.roomId]) {
@@ -311,8 +305,6 @@ io.on('connection', (socket) => {
     }
   });
 });
-
-loadWeaponData();
 
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

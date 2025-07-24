@@ -1,0 +1,4 @@
+맵선택, 인원수, 공개/비밀방, 라운드 시간, 모드 설정
+hp 바 UI 생성, 사망 오버레이, 데스 모션, 피격 효과, 부활 기능, 랜덤 위치 리스폰, 맵 밖에 나가면 데미지 입고 사망
+
+death, defeat, idle, jump, pickup, receievehit, roll, run, run_carry, shoot_onehanded, sitdown, standup, swordslash, victory, walk, walk_carry

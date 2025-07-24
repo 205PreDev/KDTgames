@@ -2,37 +2,29 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.124/build/three.mod
 import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.124/examples/jsm/controls/OrbitControls.js';
 import { player } from './player.js';
 import { object } from './object.js';
-import { Item } from './item.js';
 import { math } from './math.js';
-import { hp } from './hp.js';
-import { WEAPON_DATA, WeaponFactory, WeaponManager, ATTACK_TYPE_MELEE, ATTACK_TYPE_RANGED, loadWeaponData } from './weapon_system.js';
-import { SoundManager } from './soundManager.js';
-import { initMuzzleFlashPool, muzzleFlashPool } from './effects.js';
+import { hp } from './hp.js'; // hp.js 임포트
+import { WEAPON_DATA, loadWeaponData, spawnWeaponOnMap, getRandomWeaponName } from './weapon.js';
+// import { AttackSystem } from './attackSystem.js'; // AttackSystem 임포트 제거
 
 const socket = io();
 
-export class GameStage3 {
-  constructor(socket, players, map) {
-    this.weapons_ = []; // 무기 아이템들을 저장할 배열 초기화
-    this.weaponSpawnTimer_ = 0; // 무기 소환 타이머
-    this.weaponSpawnInterval_ = 10; // 무기 소환 주기 (10초)
-    this.MAX_WEAPONS_ON_MAP = 10; // 맵에 존재할 수 있는 최대 무기 개수
-    this.soundManager = null; // SoundManager 인스턴스
+export class GameStage1 {
+  constructor(socket, players, map, spawnedWeapons) {
     this.socket = socket;
     this.players = {}; // To store other players' objects
     this.localPlayerId = socket.id;
     this.playerInfo = players;
     this.map = map;
-  }
+    this.spawnedWeapons = spawnedWeapons; // Store spawned weapons data
+    this.spawnedWeaponObjects = []; // Store actual Weapon instances
 
-  async initGameStage() {
-    await loadWeaponData(); // 무기 데이터 로드
     this.Initialize();
     this.RAF();
     this.SetupSocketEvents();
   }
 
-  Initialize() {
+  async Initialize() {
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(window.devicePixelRatio);
     this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -50,22 +42,21 @@ export class GameStage3 {
     this.camera.position.set(-8, 6, 12);
     this.camera.lookAt(0, 2, 0);
 
-    this.soundManager = new SoundManager(this.camera);
-    this.loadGameSounds();
-
     this.scene = new THREE.Scene();
-
-    initMuzzleFlashPool(this.scene, 20);
 
     this.SetupLighting();
     this.SetupSkyAndFog();
     this.CreateGround();
-    for (let i = 0; i < this.MAX_WEAPONS_ON_MAP; i++) {
-      this.spawnSingleWeapon(); // 게임 시작 시 MAX_WEAPONS_ON_MAP 개수만큼 무기 생성
-    }
-    this.CreatePlayer();
+    // this.attackSystem = new AttackSystem(this.scene); // AttackSystem 인스턴스 생성 제거
+    this.CreateLocalPlayer();
 
-    // 맵 경계 정의 (80x80 맵의 절반)
+    
+
+    await loadWeaponData(); // 무기 데이터 로드를 기다립니다.
+    for (const weaponData of this.spawnedWeapons) {
+      const weapon = spawnWeaponOnMap(this.scene, weaponData.weaponName, weaponData.x, weaponData.y, weaponData.z, weaponData.uuid);
+      this.spawnedWeaponObjects.push(weapon);
+    }
     this.mapBounds = { minX: -40, maxX: 40, minZ: -40, maxZ: 40 };
     this.damageTimer = 0;
     this.damageInterval = 0.5; // 0.5초마다 데미지
@@ -73,14 +64,8 @@ export class GameStage3 {
     this.isRespawning = false;
 
     window.addEventListener('resize', () => this.OnWindowResize(), false);
+    document.addEventListener('keydown', (e) => this._OnKeyDown(e), false);
   }
-  loadGameSounds() {
-    // 사운드 파일 로드 (비동기 처리)
-    this.soundManager.loadSound('attack_swing', 'resources/audio/attack_swing.mp3');
-    this.soundManager.loadSound('hit_impact', 'resources/audio/hit_impact.mp3');
-    this.soundManager.loadSound('jump_sound', 'resources/audio/jump_sound.mp3');
-    // 필요한 다른 사운드들도 여기에 추가
-}
 
   SetupLighting() {
     const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
@@ -155,65 +140,7 @@ export class GameStage3 {
     this.ground.receiveShadow = true;
     this.scene.add(this.ground);
   }
-  CreatePlayer() {
-    // 플레이어 생성 및 HP UI 연결
-    const localPlayerData = this.playerInfo.find(p => p.id === this.localPlayerId);
 
-    this.player_ = new player.Player({
-        scene: this.scene,
-        character: localPlayerData.character,
-        weapons: this.weapons_,
-        soundManager: this.soundManager, // SoundManager 전달
-        camera: this.camera, // 카메라 인스턴스 전달
-        hpUI: new hp.HPUI(this.scene, this.renderer, localPlayerData.nickname), // HPUI 인스턴스 생성 및 전달
-    });
-// npc 제거
-    // === 추가: window.playerInstance 할당 ===
-    window.playerInstance = this.player_;
-// npc 제거
-    // 카메라 오프셋 및 회전
-    this.cameraTargetOffset = new THREE.Vector3(0, 15, 10);
-    this.rotationAngle = 4.715;
-
-    // 마우스 드래그로 카메라 회전
-    window.addEventListener('mousemove', (e) => this.OnMouseMove(e), false);
-    
-  }
-  CreateWeapons() {
-    this.weapons_ = [];
-  }
-  spawnSingleWeapon() {
-    if (this.weapons_.length >= this.MAX_WEAPONS_ON_MAP) {
-        return; // 최대 개수에 도달하면 생성하지 않음
-    }
-
-    const weaponNames = Object.keys(WEAPON_DATA);
-    const randomIndex = math.rand_int(0, weaponNames.length - 1);
-    const weaponName = weaponNames[randomIndex];
-
-    // Potion은 특정 위치에만 생성되도록 예외 처리
-    let pos;
-    if (weaponName === 'Potion1_Filled.fbx') {
-        pos = new THREE.Vector3(0, 1, 4);
-    } else {
-        pos = new THREE.Vector3(math.rand_int(-20, 20), 1, math.rand_int(-20, 20));
-    }
-
-    const weaponData = WEAPON_DATA[weaponName];
-    if (weaponData) {
-        const weapon = new Item(this.scene, weaponName, pos, weaponData.type, weaponData.radius, weaponData.angle, weaponData.damage, weaponData.attackSpeedMultiplier, weaponData.attackType, weaponData.specialEffect, weaponData.statEffect);
-        this.weapons_.push(weapon);
-        console.log(`무기 생성: ${weaponName} (현재 ${this.weapons_.length}개)`);
-    } else {
-        console.warn(`무기 데이터를 찾을 수 없습니다: ${weaponName}`);
-    }
-  }
-  OnMouseMove(event) {
-    if (event.buttons === 1) {
-        const deltaX = event.movementX || 0;
-        this.rotationAngle -= deltaX * 0.005;
-    }
-  }
   getRandomPosition() {
     const maxAttempts = 100; // 최대 시도 횟수
     const playerHalfWidth = 0.65; // player.js의 halfWidth
@@ -281,8 +208,11 @@ export class GameStage3 {
       scene: this.scene,
       onDebugToggle: (visible) => this.npc_.ToggleDebugVisuals(visible),
       character: localPlayerData.character,
+      nickname: localPlayerData.nickname, // 닉네임 추가
       hpUI: new hp.HPUI(this.scene, this.renderer, localPlayerData.nickname), // HPUI 인스턴스 생성 및 전달
       getRespawnPosition: () => this.getRandomPosition(),
+      // attackSystem: this.attackSystem, // AttackSystem 인스턴스 전달 제거
+      socket: this.socket, // socket 인스턴스 전달
       onLoad: () => {
         const initialPosition = this.getRandomPosition();
         this.player_.SetPosition([initialPosition.x, initialPosition.y, initialPosition.z]);
@@ -292,7 +222,7 @@ export class GameStage3 {
     this.cameraTargetOffset = new THREE.Vector3(0, 15, 10);
     this.rotationAngle = 4.715;
   }
-  
+
   OnWindowResize() {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
@@ -315,87 +245,54 @@ export class GameStage3 {
 
   SetupSocketEvents() {
     this.socket.on('gameUpdate', (data) => {
-      if (data.type === 'playerState') {
-        const playerData = data.data;
-        if (playerData.id === this.localPlayerId) return;
+      // Update other players' positions
+      if (data.playerId === this.localPlayerId) return; // Don't update self
 
-        let otherPlayer = this.players[playerData.id];
-        if (!otherPlayer) {
-          const remotePlayerData = this.playerInfo.find(p => p.id === playerData.id);
-          // 캐릭터 정보 누락 시 fallback
-          const characterName = (remotePlayerData && remotePlayerData.character) ? remotePlayerData.character : 'Knight_Male';
-          if (!remotePlayerData || !remotePlayerData.character) {
-            console.warn('[SetupSocketEvents] 원격 플레이어 캐릭터 정보 누락, Knight_Male로 fallback');
-          }
-          otherPlayer = new player.Player({
-            scene: this.scene,
-            character: characterName,
-            isRemote: true,
-            hpUI: new hp.HPUI(this.scene, this.renderer, remotePlayerData ? remotePlayerData.nickname : 'Unknown')
-          });
-          this.players[playerData.id] = otherPlayer;
+      let otherPlayer = this.players[data.playerId];
+      if (!otherPlayer) {
+        const remotePlayerData = this.playerInfo.find(p => p.id === data.playerId);
+        // Create a new player object for the new player
+        otherPlayer = new player.Player({
+          scene: this.scene,
+          character: remotePlayerData.character,
+          nickname: remotePlayerData.nickname, // 닉네임 추가
+          isRemote: true,
+          playerId: remotePlayerData.id, // playerId 추가
+          hpUI: new hp.HPUI(this.scene, this.renderer, remotePlayerData.nickname), // 원격 플레이어 HPUI 생성
+          // attackSystem: this.attackSystem, // AttackSystem 인스턴스 전달 제거
+          socket: this.socket // socket 인스턴스 전달
+        });
+        this.players[data.playerId] = otherPlayer;
+      }
+      otherPlayer.SetPosition(data.position);
+      otherPlayer.SetRotation(data.rotation);
+      if (data.animation) {
+        otherPlayer.SetRemoteAnimation(data.animation);
+      }
+      // 원격 플레이어 HP 업데이트
+      if (data.hp !== undefined) {
+        otherPlayer.hp_ = data.hp;
+        if (otherPlayer.hpUI) {
+          otherPlayer.hpUI.updateHP(data.hp);
         }
-        try {
-          otherPlayer.UpdateRemoteState(playerData);
-        } catch (err) {
-          console.error('[SetupSocketEvents] 원격 플레이어 상태 업데이트 오류:', err);
-        }
-      } else {
-        // 기존 방식의 데이터 처리 (하위 호환성)
-        if (data.playerId === this.localPlayerId) return;
-
-        let otherPlayer = this.players[data.playerId];
-        if (!otherPlayer) {
-          const remotePlayerData = this.playerInfo.find(p => p.id === data.playerId);
-          const characterName = (remotePlayerData && remotePlayerData.character) ? remotePlayerData.character : 'Knight_Male';
-          if (!remotePlayerData || !remotePlayerData.character) {
-            console.warn('[SetupSocketEvents] 원격 플레이어 캐릭터 정보 누락, Knight_Male로 fallback');
-          }
-          otherPlayer = new player.Player({
-            scene: this.scene,
-            character: characterName,
-            isRemote: true,
-            hpUI: new hp.HPUI(this.scene, this.renderer, remotePlayerData ? remotePlayerData.nickname : 'Unknown')
-          });
-          this.players[data.playerId] = otherPlayer;
-        }
-        try {
-          if (data.position) otherPlayer.SetPosition(data.position);
-          if (data.rotation) otherPlayer.SetRotation(data.rotation);
-          if (data.animation && typeof data.animation === 'string') {
-            otherPlayer.SetAnimation_(data.animation);
-          } else {
-            console.warn('[SetupSocketEvents] 잘못된 애니메이션 상태, Idle로 fallback');
-            otherPlayer.SetAnimation_('Idle');
-          }
-          if (data.hp !== undefined) {
-            if (data.hp < otherPlayer.hp_) {
-              otherPlayer.TakeDamage(otherPlayer.hp_ - data.hp);
-            } else if (data.hp === 100 && otherPlayer.isDead_) {
-              otherPlayer.hp_ = data.hp;
-              otherPlayer.isDead_ = false;
-              otherPlayer.SetAnimation_('Idle');
-              if (otherPlayer.hpUI) otherPlayer.hpUI.updateHP(data.hp);
-            } else {
-              otherPlayer.hp_ = data.hp;
-              if (otherPlayer.hpUI) otherPlayer.hpUI.updateHP(data.hp);
-            }
-          }
-        } catch (err) {
-          console.error('[SetupSocketEvents] 원격 플레이어 동기화 오류:', err);
+        if (data.hp <= 0 && !otherPlayer.isDead_) {
+          otherPlayer.isDead_ = true;
+          otherPlayer.SetRemoteAnimation('Death');
+        } else if (data.hp > 0 && otherPlayer.isDead_) {
+          otherPlayer.isDead_ = false;
+          otherPlayer.SetRemoteAnimation('Idle');
         }
       }
-    });
-
-    // 공격 동기화: player-attack 이벤트 수신 및 처리
-    this.socket.on('player-attack', (attackInfo) => {
-      try {
-        const attacker = this.players[attackInfo.id];
-        if (attacker && attacker.isRemote) {
-          attacker.OnRemoteAttack(attackInfo);
+      // 원격 플레이어 무기 장착/해제 업데이트
+      if (data.equippedWeapon !== undefined) {
+        const currentEquippedWeapon = otherPlayer.currentWeaponModel ? otherPlayer.currentWeaponModel.userData.weaponName : null;
+        if (data.equippedWeapon !== currentEquippedWeapon) {
+          if (data.equippedWeapon) {
+            otherPlayer.EquipWeapon(data.equippedWeapon);
+          } else {
+            otherPlayer.UnequipWeapon();
+          }
         }
-      } catch (err) {
-        console.error('[player-attack] 공격 동기화 오류:', err);
       }
     });
 
@@ -412,6 +309,132 @@ export class GameStage3 {
         delete this.players[playerId];
       }
     });
+
+    this.socket.on('weaponPickedUp', (weaponUuid) => {
+      const pickedUpWeapon = this.spawnedWeaponObjects.find(w => w.uuid === weaponUuid);
+      if (pickedUpWeapon) {
+        this.scene.remove(pickedUpWeapon.model_);
+        this.spawnedWeaponObjects = this.spawnedWeaponObjects.filter(w => w.uuid !== weaponUuid);
+        console.log(`Weapon ${weaponUuid} removed from scene.`);
+      }
+    });
+
+    this.socket.on('weaponSpawned', (weaponData) => {
+      const weapon = spawnWeaponOnMap(this.scene, weaponData.weaponName, weaponData.x, weaponData.y, weaponData.z, weaponData.uuid);
+      this.spawnedWeaponObjects.push(weapon);
+      console.log(`Weapon ${weaponData.uuid} spawned on scene.`);
+    });
+
+    this.socket.on('playerAttack', (data) => {
+      if (data.playerId === this.localPlayerId) return; // Don't update self
+      const otherPlayer = this.players[data.playerId];
+      if (otherPlayer) {
+        otherPlayer.PlayAttackAnimation(data.animationName);
+      }
+    });
+
+    this.socket.on('hpUpdate', (data) => {
+      console.log(`[Main] Received hpUpdate: playerId=${data.playerId}, hp=${data.hp}`);
+      const targetPlayer = (data.playerId === this.localPlayerId) ? this.player_ : this.players[data.playerId];
+      if (targetPlayer) {
+        const oldHp = targetPlayer.hp_;
+        targetPlayer.hp_ = data.hp; // 서버에서 받은 HP로 직접 설정
+        targetPlayer.hpUI.updateHP(data.hp); // UI 업데이트
+        console.log(`[Main] ${targetPlayer.nickname_}'s HP updated to: ${targetPlayer.hp_}`);
+
+        if (data.hp <= 0 && !targetPlayer.isDead_) {
+          targetPlayer.isDead_ = true;
+          targetPlayer.SetAnimation_('Death');
+          if (data.playerId === this.localPlayerId) { // 로컬 플레이어인 경우에만 사망 UI 및 타이머 트리거
+            targetPlayer.DisableInput_();
+            targetPlayer.respawnTimer_ = targetPlayer.respawnDelay_;
+            if (targetPlayer.overlay) {
+              targetPlayer.overlay.style.visibility = 'visible';
+              targetPlayer.startCountdown();
+            }
+          }
+        } else if (data.hp > 0 && targetPlayer.isDead_) { // 리스폰
+          targetPlayer.isDead_ = false;
+          targetPlayer.Respawn_(); // Respawn_ 함수 호출하여 상태 및 위치 재설정
+        } else if (data.hp < oldHp) { // HP가 실제로 감소했을 때만 피격 효과 트리거
+          // 로컬 플레이어인 경우 피격 효과 (빨간 화면) 트리거
+          if (data.playerId === this.localPlayerId && targetPlayer.hitEffect) {
+            targetPlayer.hitEffect.style.opacity = '1';
+            setTimeout(() => {
+              targetPlayer.hitEffect.style.opacity = '0';
+            }, 100);
+          }
+          // 죽지 않았을 경우 receievehit 애니메이션 트리거
+          if (targetPlayer.hp_ > 0) {
+            targetPlayer.SetAnimation_('receievehit');
+          }
+        }
+      }
+    });
+
+    this.socket.on('remoteAnimationChange', (data) => {
+      if (this.players[data.playerId]) {
+        this.players[data.playerId].SetRemoteAnimation(data.anim);
+      }
+    });
+  }
+
+  _OnKeyDown(event) {
+    switch (event.keyCode) {
+      case 69: // E key
+        if (this.player_ && this.player_.mesh_) {
+          const playerPosition = this.player_.mesh_.position;
+          let pickedUp = false;
+          for (let i = 0; i < this.spawnedWeaponObjects.length; i++) {
+            const weapon = this.spawnedWeaponObjects[i];
+            if (weapon.model_) {
+              const distance = playerPosition.distanceTo(weapon.model_.position);
+              if (distance < 2.0) { // Pickup range
+                this.scene.remove(weapon.model_);
+                this.spawnedWeaponObjects.splice(i, 1);
+                this.socket.emit('weaponPickedUp', weapon.uuid);
+                this.player_.EquipWeapon(weapon.weaponName); // Equip the weapon
+                this.socket.emit('weaponEquipped', weapon.weaponName); // 서버에 무기 장착 정보 전송
+                pickedUp = true;
+
+                // 새로운 무기 스폰 로직 추가
+                const newWeaponName = getRandomWeaponName();
+                if (newWeaponName) {
+                  const newSpawnPosition = this.getRandomPosition();
+                  const newWeaponUuid = THREE.MathUtils.generateUUID(); // 새로운 무기 UUID 생성
+                  const newWeapon = spawnWeaponOnMap(this.scene, newWeaponName, newSpawnPosition.x, newSpawnPosition.y, newSpawnPosition.z, newWeaponUuid);
+                  this.spawnedWeaponObjects.push(newWeapon);
+                  this.socket.emit('weaponSpawned', {
+                    weaponName: newWeaponName,
+                    x: newSpawnPosition.x,
+                    y: newSpawnPosition.y,
+                    z: newSpawnPosition.z,
+                    uuid: newWeaponUuid
+                  });
+                }
+                break;
+              }
+            }
+          }
+        }
+        break;
+      case 74: // J key
+        if (this.player_ && this.player_.mesh_) {
+          let attackAnimation = 'SwordSlash'; // 기본값
+          // 무기 종류에 따라 애니메이션 선택
+          if (this.player_.currentWeaponModel && this.player_.currentWeaponModel.userData.weaponName) {
+            const weaponName = this.player_.currentWeaponModel.userData.weaponName;
+            if (/Pistol|Shotgun|SniperRifle|AssaultRifle|Bow/i.test(weaponName)) {
+              attackAnimation = 'Shoot_OneHanded';
+            } else if (/Sword|Axe|Dagger|Hammer/i.test(weaponName)) {
+              attackAnimation = 'SwordSlash';
+            }
+          }
+          this.player_.PlayAttackAnimation(attackAnimation);
+          this.socket.emit('playerAttack', attackAnimation); // 서버에 공격 애니메이션 정보 전송
+        }
+        break;
+    }
   }
 
   RAF(time) {
@@ -421,14 +444,8 @@ export class GameStage3 {
     const delta = ((time || performance.now()) - this.prevTime) * 0.001;
     this.prevTime = time || performance.now();
 
-    this.weaponSpawnTimer_ += delta;
-    if (this.weaponSpawnTimer_ >= this.weaponSpawnInterval_) {
-        this.spawnSingleWeapon();
-        this.weaponSpawnTimer_ = 0;
-    }
-
     if (this.player_ && this.player_.mesh_) {
-      this.player_.Update(delta, this.rotationAngle);
+      this.player_.Update(delta, this.rotationAngle, this.npc_.GetCollidables());
       this.UpdateCamera();
 
       // Send player position to server
@@ -437,7 +454,9 @@ export class GameStage3 {
         position: this.player_.mesh_.position.toArray(),
         rotation: this.player_.mesh_.rotation.toArray(),
         animation: this.player_.currentAnimationName_, // Add animation state
-        hp: this.player_.hp_ // Add HP state
+        hp: this.player_.hp_, // Add HP state
+        equippedWeapon: this.player_.currentWeaponModel ? this.player_.currentWeaponModel.userData.weaponName : null, // Add equipped weapon state
+        isAttacking: this.player_.isAttacking_ // Add attacking state
       });
 
       // 맵 경계 체크 및 데미지 적용
@@ -450,24 +469,14 @@ export class GameStage3 {
       ) {
         this.damageTimer += delta;
         if (this.damageTimer >= this.damageInterval) {
-          this.player_.TakeDamage(this.damageAmount);
+          if (!this.player_.isDead_) { // 플레이어가 죽은 상태가 아닐 때만 데미지 적용
+            this.socket.emit('playerDamage', { targetId: this.localPlayerId, damage: this.damageAmount });
+          }
           this.damageTimer = 0;
         }
       } else {
         this.damageTimer = 0; // 맵 안으로 들어오면 타이머 초기화
       }
-
-      if (this.player_.mesh_) {
-        const stats = {
-            health: `${this.player_.hp_} / ${this.player_.maxHp_}`,
-            speed: this.player_.speed_,
-            strength: this.player_.strength_,
-            agility: this.player_.agility_,
-            stamina: this.player_.stamina_
-        };
-        
-        
-    }
 
       // HP UI 업데이트
       if (this.player_.hpUI) {
@@ -479,12 +488,14 @@ export class GameStage3 {
       this.players[id].Update(delta);
     }
 
+    if (this.npc_) {
+      this.npc_.Update(delta);
+    }
+
+    // AttackSystem 업데이트 제거
+    // this.attackSystem.update(delta, Object.values(this.players), [this.npc_]);
 
     this.renderer.render(this.scene, this.camera);
-    this.player_.attackSystem.update(delta, this.npcs_); // 투사체 시스템 업데이트
-    if (muzzleFlashPool) {
-        muzzleFlashPool.update(delta);
-    }
   }
 }
 
@@ -552,7 +563,7 @@ function updatePlayers(players, maxPlayers) {
           closeBtn.textContent = 'X';
           closeBtn.addEventListener('click', (e) => {
             e.stopPropagation(); // Prevent click from propagating to the slot itself
-            socket.emit('closePlayerSlot', i); // Send slot index
+            socket.emit('closePlayerSlot', i);
           });
           playerSlot.appendChild(closeBtn);
         }
@@ -769,11 +780,10 @@ socket.on('updatePlayers', (players, maxPlayers) => {
   }
 });
 
-socket.on('startGame', async (gameInfo) => {
+socket.on('startGame', (gameInfo) => {
   waitingRoom.style.display = 'none';
   controls.style.display = 'block';
-  const game = new GameStage3(socket, gameInfo.players, gameInfo.map);
-  await game.initGameStage();
+  new GameStage1(socket, gameInfo.players, gameInfo.map, gameInfo.spawnedWeapons);
 });
 
 socket.on('roomError', (message) => {
