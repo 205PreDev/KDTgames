@@ -1,0 +1,222 @@
+================================================================
+           KDT 격투 게임 - 프로젝트 구조 설명서
+================================================================
+작성일: 2026-03-18
+프로젝트: kdt-game (멀티플레이어 3D 격투 게임)
+기술스택: Node.js, Express, Socket.IO, Three.js (r124)
+================================================================
+
+
+■ 프로젝트 개요
+──────────────────────────────────────────────────────────────
+3D 웹 기반 멀티플레이어 격투 게임입니다.
+플레이어는 방을 생성하거나 참가하여 무기를 줍고 상대방과 전투합니다.
+서버-클라이언트 구조로, 실시간 통신은 Socket.IO로 처리됩니다.
+
+
+■ 디렉토리 구조
+──────────────────────────────────────────────────────────────
+KDTgames/
+├── server.js              # Node.js 서버 (Express + Socket.IO)
+├── weaponUtils.js         # 무기 이름 랜덤 생성 유틸리티
+├── package.json           # 프로젝트 메타 및 의존성 (express, socket.io)
+├── idea.txt               # 기획 메모 (게임 기능 아이디어)
+├── logic.txt              # walkAttack 복합 애니메이션 구현 로직 메모
+├── todo_list.txt          # 개발 할 일 목록
+│
+└── public/                # 정적 파일 (클라이언트 코드)
+    ├── index.html         # 메인 HTML (UI, 로비, 게임 화면)
+    ├── main.js            # 게임 진입점 및 GameStage1 클래스
+    ├── player.js          # 로컬/리모트 플레이어 클래스
+    ├── player_copy.js     # 플레이어 백업 파일 (참고용)
+    ├── weapon.js          # 무기 로드, 스폰, Weapon 클래스
+    ├── weapon_system.js   # 무기 장착/해제 시스템
+    ├── attackSystem.js    # 공격 판정 시스템
+    ├── meleeProjectile.js # 근접 공격 투사체 처리
+    ├── hp.js              # HP 바 UI 클래스 (HPUI)
+    ├── ui.js              # 기타 UI 유틸리티
+    ├── map.js             # 맵 경계, 낙하 데미지 상수 및 함수
+    ├── effects.js         # 피격 이펙트, 시각 효과
+    ├── soundManager.js    # 사운드 재생 관리
+    ├── object.js          # 맵 오브젝트(나무, 돌 등) 배치
+    ├── item.js            # 아이템 스폰 관련
+    ├── math.js            # 수학 유틸리티 함수
+    └── resources/         # 에셋 리소스
+        ├── data/
+        │   └── weapon_data.json   # 무기 정보(스탯, 파일명 등)
+        ├── weapon/FBX/            # 무기 3D 모델 (FBX)
+        ├── character/             # 캐릭터 3D 모델 (FBX/GLTF)
+        └── Ultimate Nature Pack - Jun 2019/FBX/  # 자연물 에셋
+
+
+■ 파일별 역할 상세 설명
+──────────────────────────────────────────────────────────────
+
+▶ server.js
+  - Express HTTP 서버 + Socket.IO 서버를 함께 실행합니다.
+  - 방(Room) 관리:
+      · createRoom: 방 생성 (맵, 최대 인원, 공개/비공개, 라운드 시간 등 설정)
+      · joinRoom: 방 참가 (닉네임, 캐릭터 정보 포함)
+      · increaseMaxPlayers / closePlayerSlot: 방장이 인원 조정
+  - 게임 진행:
+      · startGameRequest: 방장이 시작 요청 시 무기 10개 랜덤 스폰
+      · gameUpdate: 플레이어 위치/상태 실시간 브로드캐스트
+      · weaponPickedUp / weaponSpawned: 무기 픽업 동기화
+      · playerDamage / hpUpdate: HP 데미지 처리 및 브로드캐스트
+      · animationChange: 애니메이션 상태 동기화
+  - 서버 포트: 환경변수 PORT 또는 기본값 3000
+
+▶ weaponUtils.js
+  - 무기 이름을 랜덤으로 반환하는 getRandomWeaponName() 함수 제공
+  - server.js에서 게임 시작 시 무기 10개 스폰에 사용
+
+▶ public/main.js (GameStage1 클래스)
+  - Three.js 씬(Scene) 초기화 및 렌더 루프(RAF) 관리
+  - 게임 진입점: 메인 메뉴 → 방 생성/참가 → 게임 시작 흐름 제어
+  - 주요 초기화:
+      · WebGLRenderer, PerspectiveCamera, Scene 생성
+      · 조명(DirectionalLight, AmbientLight) 설정
+      · 하늘(Sky) 및 안개(Fog) 설정
+      · 바닥(Ground) 평면 생성
+      · 로컬 플레이어 및 무기 생성
+  - 맵 경계 이탈 시 데미지(25) 및 낙사 처리
+  - Socket.IO 이벤트로 다른 플레이어 입장/퇴장, 위치 동기화 처리
+
+▶ public/player.js (Player 클래스)
+  - 로컬 플레이어와 리모트 플레이어를 모두 처리하는 핵심 클래스
+  - 주요 기능:
+      · FBX 캐릭터 모델 로드 및 애니메이션 설정
+      · 이동(WASD), 점프(Space), 구르기(Shift+이동), 공격(J/K)
+      · 뼈대 기반 상하체 분리 애니메이션 (walkAttack: 하체=걷기, 상체=공격)
+      · 무기 장착/해제 시 핸드 본(FistR)에 무기 모델 부착
+      · HP 관리 및 사망/리스폰 처리 (3초 딜레이 후 랜덤 위치 리스폰)
+      · 사망 오버레이 UI ("또 죽었어?" 텍스트 + 카운트다운)
+      · 콜라이더(BoundingBox) 충돌 처리
+  - boneGroups_:
+      · lowerBody: Hips, UpperLegL/R, LowerLegL/R, FootL/R
+      · upperBody: Abdomen, Torso, Neck, Head, Shoulder, UpperArm, LowerArm, Fist (양쪽)
+
+▶ public/weapon.js (Weapon 클래스)
+  - weapon_data.json 에서 무기 데이터 로드 (loadWeaponData)
+  - 맵에 무기 FBX 모델 스폰 (spawnWeaponOnMap)
+  - 총기류: scale 0.005, 근접무기: scale 0.01로 설정
+  - 무기는 Y축 회전 애니메이션으로 맵에 표시됨
+
+▶ public/weapon_system.js
+  - 플레이어의 무기 장착(equip)/해제(unequip) 로직
+  - FistR 본에 무기 모델을 부착하고 회전/위치 보정
+
+▶ public/attackSystem.js
+  - 근접/원거리 공격 판정 처리
+  - 플레이어 간 충돌 히트박스 계산
+
+▶ public/meleeProjectile.js
+  - 근접 공격 시 생성되는 투사체 효과 처리
+
+▶ public/hp.js (HPUI 클래스)
+  - 화면 상단에 HP 바 UI를 생성하고 업데이트
+  - 내 HP(빨강)와 상대 HP를 시각적으로 표시
+
+▶ public/map.js
+  - 맵 경계 상수: minX/maxX = ±40, minZ/maxZ = ±40
+  - isOutOfBounds(pos): 맵 밖 여부 확인
+  - isBelowFloor(pos): 바닥 아래 여부 확인
+  - isBelowFallY(pos): 낙사 높이 여부 확인
+  - 낙하 데미지: 35 / 간격: 0.3초
+
+▶ public/effects.js
+  - 피격 시 화면 효과 (빨간 플래시 등)
+  - 파티클 또는 시각 이펙트 처리
+
+▶ public/soundManager.js
+  - 배경음악 및 효과음 재생/정지 관리
+
+▶ public/object.js
+  - 맵에 나무, 돌 등 자연물 오브젝트 배치
+  - Ultimate Nature Pack FBX 에셋 사용
+
+▶ public/math.js
+  - 벡터 연산, 각도 계산 등 공통 수학 유틸리티
+
+▶ public/ui.js
+  - 체력바 외 기타 UI 요소 (점수판, 닉네임 표시 등)
+
+▶ public/item.js
+  - 아이템 스폰 및 습득 관련 로직
+
+
+■ 소켓 이벤트 흐름
+──────────────────────────────────────────────────────────────
+
+클라이언트 → 서버 이벤트:
+  getPublicRooms      : 공개 방 목록 요청
+  createRoom          : 방 생성 (맵, 인원, 공개여부, 라운드시간, 닉네임, 캐릭터, 방이름)
+  joinRoom            : 방 참가 (roomId, 닉네임, 캐릭터)
+  ready               : 준비 상태 토글
+  startGameRequest    : 게임 시작 요청 (방장 전용)
+  gameUpdate          : 매 프레임 위치/상태 전송 (equippedWeapon, isAttacking, hp 포함)
+  weaponPickedUp      : 무기 픽업 (uuid)
+  weaponSpawned       : 무기 스폰
+  weaponEquipped      : 무기 장착 알림
+  playerAttack        : 공격 애니메이션 알림
+  playerDamage        : 데미지 요청 (targetId, damage)
+  animationChange     : 애니메이션 상태 변경 알림
+
+서버 → 클라이언트 이벤트:
+  publicRoomsList     : 공개 방 목록 응답
+  roomCreated         : 방 생성 완료 (id, name, map)
+  roomJoined          : 방 참가 완료
+  roomError           : 방 오류 메시지
+  updatePlayers       : 현재 방 플레이어 목록 갱신
+  allPlayersReady     : 전원 준비 완료 알림 (방장에게)
+  startGame           : 게임 시작 (players, map, spawnedWeapons)
+  hpUpdate            : HP 갱신 (playerId, hp)
+  weaponPickedUp      : 무기 제거 브로드캐스트
+  weaponSpawned       : 새 무기 스폰 브로드캐스트
+  playerEquippedWeapon: 타 플레이어 무기 장착 알림
+  playerAttack        : 타 플레이어 공격 알림
+  remoteAnimationChange: 타 플레이어 애니메이션 변경
+
+
+■ 애니메이션 목록 (캐릭터 FBX 기준)
+──────────────────────────────────────────────────────────────
+  death, defeat, idle, jump, pickup, receivehit, roll,
+  run, run_carry, shoot_onehanded, sitdown, standup,
+  swordslash, victory, walk, walk_carry
+
+  복합 애니메이션 (상하체 분리):
+    walkAttack = walk(하체) + swordslash(상체)
+
+
+■ 게임 플레이 흐름
+──────────────────────────────────────────────────────────────
+1. 메인 메뉴 진입 → 닉네임 입력 + 캐릭터 선택
+2. [방 만들기] 또는 [방 참가]
+   - 방 만들기: 맵, 최대 인원(최대 8명), 공개/비공개, 라운드 시간 설정
+   - 방 참가: 공개 방 목록에서 선택 또는 비공개 방 코드 입력
+3. 대기실: 모든 플레이어 준비 완료 시 방장이 게임 시작
+4. 게임 시작: 서버가 무기 10개를 맵에 랜덤 스폰
+5. 인게임:
+   - WASD: 이동 / Space: 점프 / Shift: 구르기
+   - J/K: 공격 (장착 무기에 따라 애니메이션 변경)
+   - 무기 근처에서 자동 픽업
+   - 맵 밖으로 나가면 0.5초마다 25 데미지 → HP 0 시 사망
+   - 사망 후 3초 후 랜덤 위치에 리스폰
+6. 상대방 HP 0 → 사망 처리 (서버에서 hpUpdate 브로드캐스트)
+
+
+■ 의존성
+──────────────────────────────────────────────────────────────
+서버 (Node.js):
+  - express ^5.1.0   : HTTP 서버 및 정적 파일 서빙
+  - socket.io ^4.7.5 : 실시간 WebSocket 통신
+
+클라이언트 (CDN):
+  - three@0.124       : 3D 렌더링 엔진
+  - three/GLTFLoader  : GLTF 모델 로더
+  - three/FBXLoader   : FBX 모델 로더
+  - three/OrbitControls: 카메라 컨트롤 (개발/디버그용)
+
+================================================================
+                        문서 끝
+================================================================
